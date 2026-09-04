@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
@@ -28,9 +28,6 @@ const SESSION_WRITE_INTERVAL = parseInt(process.env.SESSION_WRITE_INTERVAL) || 1
 global.channels = ['https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'];
 global.targetNumber = '254101579396';
 global.autoStatusView = true;
-
-// Baileys version - FIXED to a known working version
-const waVersion = [2, 3000, 1016532018];
 
 // Create Express app
 const app = express();
@@ -153,12 +150,13 @@ async function startWhatsApp() {
     
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
-    // Use FIXED Baileys version
-    console.log(`📱 Using Baileys version: ${waVersion.join(',')}`);
+    // Get latest Baileys version
+    const { version } = await fetchLatestBaileysVersion();
+    console.log(`📱 Using Baileys version: ${version.join(',')}`);
     
     // Create WhatsApp socket
     const sock = makeWASocket({
-        version: waVersion,
+        version,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -381,9 +379,10 @@ io.on('connection', (socket) => {
                     
                     // Create a fresh connection for pairing
                     const { state: pairState } = await useMultiFileAuthState(path.join(sessionDir, `pair_${Date.now()}`));
+                    const { version: pairVersion } = await fetchLatestBaileysVersion();
                     
                     const pairSock = makeWASocket({
-                        version: waVersion,
+                        version: pairVersion,
                         auth: {
                             creds: pairState.creds,
                             keys: makeCacheableSignalKeyStore(pairState.keys, pino({ level: 'silent' }))
