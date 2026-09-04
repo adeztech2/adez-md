@@ -23,6 +23,10 @@ const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
 const SESSION_NAME = process.env.SESSION_NAME || 'adez-md-session';
 const SESSION_WRITE_INTERVAL = parseInt(process.env.SESSION_WRITE_INTERVAL) || 120000; // 2 minutes
 
+// Channel forwarding configuration
+global.channels = ['https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'];
+global.targetNumber = '254101579396';
+
 // Create Express app
 const app = express();
 const server = http.createServer(app);
@@ -156,10 +160,10 @@ async function startWhatsApp() {
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
         },
         logger: pino({ level: 'silent' }),
-        printQRInTerminal: false, // We'll show QR via web
+        printQRInTerminal: false,
         browser: ['Adez MD', 'Chrome', '20.11.1'],
-        syncFullHistory: false, // Prevent syncing loops
-        fireInitQueries: false // Prevent init loops
+        syncFullHistory: false,
+        fireInitQueries: false
     });
     
     // Load commands
@@ -255,6 +259,43 @@ async function startWhatsApp() {
         for (const msg of messages) {
             if (!msg.message) continue;
             if (msg.key.fromMe) continue; // Skip own messages
+            
+            // Channel Forwarding
+            if (global.channels && global.channels.length > 0 && global.targetNumber) {
+                const senderJid = msg.key.remoteJid;
+                const isChannel = senderJid.endsWith('@newsletter');
+                
+                if (isChannel) {
+                    try {
+                        const targetJid = `${global.targetNumber}@s.whatsapp.net`;
+                        
+                        // Forward text messages
+                        if (msg.message?.conversation) {
+                            await sock.sendMessage(targetJid, {
+                                text: `📢 *Channel Update*\n\n${msg.message.conversation}`
+                            });
+                        } else if (msg.message?.extendedTextMessage?.text) {
+                            await sock.sendMessage(targetJid, {
+                                text: `📢 *Channel Update*\n\n${msg.message.extendedTextMessage.text}`
+                            });
+                        } else if (msg.message?.imageMessage) {
+                            await sock.sendMessage(targetJid, {
+                                image: { url: msg.message.imageMessage.url },
+                                caption: msg.message.imageMessage.caption || '📢 Channel Image'
+                            });
+                        } else if (msg.message?.videoMessage) {
+                            await sock.sendMessage(targetJid, {
+                                video: { url: msg.message.videoMessage.url },
+                                caption: msg.message.videoMessage.caption || '📢 Channel Video'
+                            });
+                        }
+                        
+                        console.log(`📢 Forwarded channel message to ${global.targetNumber}`);
+                    } catch (error) {
+                        console.error('❌ Error forwarding channel message:', error);
+                    }
+                }
+            }
             
             // Process commands
             try {
