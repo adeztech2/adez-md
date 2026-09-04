@@ -368,17 +368,54 @@ io.on('connection', (socket) => {
                 }
             });
             
-            // Request pairing code
-            setTimeout(async () => {
+            // Request pairing code with better error handling
+            const generatePairCode = async (retryCount = 0) => {
                 try {
-                    const pairingCode = await tempSock.requestPairingCode(targetNumber);
+                    console.log(`📱 Attempting to generate pair code for ${targetNumber} (attempt ${retryCount + 1})`);
+                    
+                    // Reset the socket connection
+                    const { state: freshState } = await useMultiFileAuthState(sessionDir);
+                    const { version: freshVersion } = await fetchLatestBaileysVersion();
+                    
+                    const freshSock = makeWASocket({
+                        version: freshVersion,
+                        auth: {
+                            creds: freshState.creds,
+                            keys: makeCacheableSignalKeyStore(freshState.keys, pino({ level: 'silent' }))
+                        },
+                        logger: pino({ level: 'silent' }),
+                        browser: ['Adez MD', 'Chrome', '20.11.1'],
+                        syncFullHistory: false,
+                        fireInitQueries: false
+                    });
+                    
+                    const pairingCode = await freshSock.requestPairingCode(targetNumber);
                     console.log(`📱 Pair code generated for ${targetNumber}: ${pairingCode}`);
                     io.emit('pair-code', pairingCode);
                 } catch (error) {
-                    console.error('❌ Failed to generate pair code:', error.message);
-                    io.emit('error', 'Failed to generate pair code. Make sure the number is valid.');
+                    console.error(`❌ Failed to generate pair code (attempt ${retryCount + 1}):`, error.message);
+                    
+                    if (error.message.includes('409') || error.message.includes('conflict')) {
+                        console.log('⚠️ Conflict detected. Waiting 10 seconds before retry...');
+                        setTimeout(() => generatePairCode(retryCount + 1), 10000);
+                    } else if (error.message.includes('401') || error.message.includes('not authorized')) {
+                        console.log('⚠️ Not authorized. Clearing session and retrying...');
+                        // Clear session
+                        fs.emptyDirSync(sessionDir);
+                        await supabaseRequest(`bu_sessions?id=eq.${SESSION_NAME}`, {
+                            method: 'DELETE'
+                        });
+                        setTimeout(() => generatePairCode(retryCount + 1), 5000);
+                    } else if (retryCount < 3) {
+                        console.log(`🔄 Retrying in 10 seconds... (attempt ${retryCount + 2})`);
+                        setTimeout(() => generatePairCode(retryCount + 1), 10000);
+                    } else {
+                        io.emit('error', 'Failed to generate pair code after multiple attempts. Please try again later.');
+                    }
                 }
-            }, 3000);
+            };
+            
+            setTimeout(() => generatePairCode(), 5000);
             
         } catch (error) {
             console.error('❌ Pair code error:', error);
