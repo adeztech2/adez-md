@@ -27,6 +27,9 @@ const SESSION_WRITE_INTERVAL = parseInt(process.env.SESSION_WRITE_INTERVAL) || 1
 global.channels = ['https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'];
 global.targetNumber = '254101579396';
 
+// Global variables
+const waVersion = [2, 3000, 1016532018];
+
 // Create Express app
 const app = express();
 const server = http.createServer(app);
@@ -152,9 +155,6 @@ async function startWhatsApp() {
     const { version } = await fetchLatestBaileysVersion();
     console.log(`📱 Using Baileys version: ${version}`);
     
-    // Force stable version to prevent 408 errors
-    const waVersion = [2, 3000, 1016132018];
-    
     // Create WhatsApp socket
     const sock = makeWASocket({
         version: waVersion,
@@ -235,6 +235,9 @@ async function startWhatsApp() {
                     method: 'DELETE'
                 });
                 startWhatsApp();
+            } else if (statusCode === 405) {
+                console.log('⚠️ Method Not Allowed (405). Using stable version...');
+                setTimeout(() => startWhatsApp(), 15000);
             } else if (statusCode === 408) {
                 // Timeout - don't restart immediately, wait longer
                 console.log('⏰ Timeout detected (408). Waiting 30 seconds before reconnect...');
