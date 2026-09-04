@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADEZ MD - Pair Code</title>
+    <title>ADEZ MD - Connect Your Bot</title>
     <style>
         * {
             margin: 0;
@@ -25,7 +25,7 @@
             border: 1px solid #333;
             border-radius: 20px;
             padding: 40px;
-            max-width: 500px;
+            max-width: 550px;
             width: 100%;
             box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             text-align: center;
@@ -181,6 +181,17 @@
             background: #00cc6a;
             box-shadow: 0 0 10px rgba(0,255,136,0.3);
         }
+        #qr-container {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 15px 0;
+        }
+        #qr-display {
+            width: 250px;
+            height: 250px;
+            object-fit: contain;
+        }
         .footer {
             margin-top: 30px;
             padding-top: 20px;
@@ -204,12 +215,25 @@
         </div>
         <h1>ADEZ MD</h1>
         <div class="powered-by">Powered by <a href="https://github.com/adeztech2">ADEZ TECH</a></div>
-        <p>Get a pairing code to connect your bot</p>
+        <p>Connect your bot to WhatsApp</p>
         
         <div id="status" class="loading">
-            <p>Ready to generate pairing code...</p>
+            <p>Waiting for QR code or pair code...</p>
         </div>
         
+        <!-- QR Code Section -->
+        <div id="qr-section" style="display: none;">
+            <div class="pair-code">
+                <h3>📱 Scan QR Code</h3>
+                <p>Scan this QR code with WhatsApp:</p>
+                <div id="qr-container">
+                    <img id="qr-display" alt="QR Code">
+                </div>
+                <p style="color: #00ff88; font-weight: bold;">Open WhatsApp > Settings > Linked Devices > Link a Device</p>
+            </div>
+        </div>
+        
+        <!-- Pair Code Section -->
         <div id="pair-code-section" style="display: none;">
             <div class="pair-code">
                 <h3>📱 Your Pairing Code</h3>
@@ -223,14 +247,10 @@
         <div class="instructions">
             <h3>📖 How to connect:</h3>
             <ol>
-                <li>Enter your WhatsApp number below</li>
-                <li>Tap the "Get Pair Code" button</li>
-                <li>Copy the 8-digit code</li>
-                <li>Open WhatsApp on your phone</li>
-                <li>Go to Settings > Linked Devices</li>
-                <li>Tap "Link with Phone Number"</li>
-                <li>Enter the code</li>
-                <li>Wait for bot to connect!</li>
+                <li>Scan the QR code with WhatsApp</li>
+                <li>OR enter your number and get a pair code</li>
+                <li>Open WhatsApp > Settings > Linked Devices</li>
+                <li>Link a Device (QR) or Link with Phone Number (Pair Code)</li>
             </ol>
         </div>
         
@@ -248,6 +268,8 @@
     <script>
         const socket = io();
         const statusDiv = document.getElementById('status');
+        const qrSection = document.getElementById('qr-section');
+        const qrDisplay = document.getElementById('qr-display');
         const pairCodeSection = document.getElementById('pair-code-section');
         const pairCode = document.getElementById('pair-code');
         const pairCodeBtn = document.getElementById('pair-code-btn');
@@ -256,6 +278,14 @@
         
         socket.on('connect', () => {
             console.log('Connected to server');
+        });
+        
+        socket.on('qr', (qr) => {
+            console.log('Received QR code');
+            qrSection.style.display = 'block';
+            qrDisplay.src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(qr);
+            statusDiv.innerHTML = '<p style="color: #888;">📱 QR Code ready! Scan to connect.</p>';
+            statusDiv.className = 'loading';
         });
         
         socket.on('pair-code', (code) => {
@@ -267,11 +297,17 @@
             pairCodeBtn.disabled = true;
             pairCodeBtn.textContent = '✅ Code Generated';
             refreshBtn.style.display = 'block';
+            
+            // Also show code in alert as fallback
+            setTimeout(() => {
+                alert(`Your Pair Code is: ${code}\n\nEnter this in WhatsApp > Settings > Linked Devices > Link with Phone Number`);
+            }, 1000);
         });
         
         socket.on('connected', (data) => {
             statusDiv.innerHTML = '<p style="color: #00ff88;">✅ Bot is connected to WhatsApp!</p>';
             statusDiv.className = 'success';
+            qrSection.style.display = 'none';
             pairCodeSection.style.display = 'none';
             pairCodeBtn.disabled = true;
             pairCodeBtn.textContent = '✅ Connected';
@@ -314,11 +350,14 @@
             
             socket.emit('request-pair-code', cleanedNumber);
             
-            // Re-enable button after 10 seconds if no response
+            // Wait up to 30 seconds for response
             setTimeout(() => {
+                if (pairCodeBtn.disabled) {
+                    statusDiv.innerHTML = '<p style="color: #ff4444;">⏰ Still waiting for code... Check Render logs for "Pair code generated"</p>';
+                }
                 pairCodeBtn.disabled = false;
                 pairCodeBtn.textContent = '📱 Get Pair Code';
-            }, 10000);
+            }, 30000);
         }
         
         function copyCode() {
@@ -354,4 +393,4 @@
         }
     </script>
 </body>
-</html>
+    </html>
