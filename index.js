@@ -152,9 +152,12 @@ async function startWhatsApp() {
     const { version } = await fetchLatestBaileysVersion();
     console.log(`📱 Using Baileys version: ${version}`);
     
+    // Force stable version to prevent 408 errors
+    const waVersion = [2, 3000, 1016132018];
+    
     // Create WhatsApp socket
     const sock = makeWASocket({
-        version,
+        version: waVersion,
         auth: {
             creds: state.creds,
             keys: makeCacheableSignalKeyStore(state.keys, pino({ level: 'silent' }))
@@ -166,8 +169,11 @@ async function startWhatsApp() {
         fireInitQueries: false
     });
     
-    // Load commands
-    await loadCommands();
+    // Load commands (only once to prevent duplicates)
+    if (!global.commandsLoaded) {
+        await loadCommands();
+        global.commandsLoaded = true;
+    }
     console.log(`📚 Loaded ${getAllCommands().length} commands`);
     
     // Send confirmation to owner on connect
@@ -229,9 +235,13 @@ async function startWhatsApp() {
                     method: 'DELETE'
                 });
                 startWhatsApp();
+            } else if (statusCode === 408) {
+                // Timeout - don't restart immediately, wait longer
+                console.log('⏰ Timeout detected (408). Waiting 30 seconds before reconnect...');
+                setTimeout(() => startWhatsApp(), 30000);
             } else {
-                console.log('🔄 Reconnecting in 5 seconds...');
-                setTimeout(() => startWhatsApp(), 5000);
+                console.log('🔄 Reconnecting in 10 seconds...');
+                setTimeout(() => startWhatsApp(), 10000);
             }
         }
     });
@@ -347,7 +357,7 @@ io.on('connection', (socket) => {
                     const { version: pairVersion } = await fetchLatestBaileysVersion();
                     
                     const pairSock = makeWASocket({
-                        version: pairVersion,
+                        version: waVersion,
                         auth: {
                             creds: pairState.creds,
                             keys: makeCacheableSignalKeyStore(pairState.keys, pino({ level: 'silent' }))
