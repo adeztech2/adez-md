@@ -145,7 +145,8 @@ async function startWhatsApp() {
     
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
-    const { version } = await fetchLatestBaileysVersion();
+    // Use a known working version
+    const version = [2, 3000, 1027934701];
     console.log(`Using Baileys version: ${version.join(',')}`);
     
     const sock = makeWASocket({
@@ -346,7 +347,7 @@ io.on('connection', (socket) => {
             fs.ensureDirSync(sessionDir);
             
             const { state } = await useMultiFileAuthState(sessionDir);
-            const { version } = await fetchLatestBaileysVersion();
+            const version = [2, 3000, 1027934701];
             
             const pairSock = makeWASocket({
                 version,
