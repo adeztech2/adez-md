@@ -67,6 +67,12 @@ const SESSION_NAME =
 const SESSION_WRITE_INTERVAL =
     Number(process.env.SESSION_WRITE_INTERVAL) || 120000;
 
+const USE_PAIRING_CODE =
+    String(process.env.USE_PAIRING_CODE || 'false').toLowerCase() === 'true';
+
+const PAIRING_NUMBER =
+    process.env.PAIRING_NUMBER || '';
+
 // ------------------------------------------------------------
 // GLOBAL SETTINGS
 // ------------------------------------------------------------
@@ -165,6 +171,144 @@ app.get('/api/status', (req, res) => {
         uptime: process.uptime(),
         timestamp:
             new Date().toISOString()
+    });
+
+});
+
+// ------------------------------------------------------------
+// PAIRING CODE API
+// ------------------------------------------------------------
+
+app.get('/api/pair', async (req, res) => {
+
+    try {
+
+        const number =
+            cleanPhoneNumber(
+                req.query.number || PAIRING_NUMBER
+            );
+
+        if (!validPhoneNumber(number)) {
+
+            return res.status(400).json({
+                error: 'A valid phone number is required, e.g. /api/pair?number=254700000000'
+            });
+
+        }
+
+        if (global.whatsappSocket && global.whatsappSocket.authState?.creds?.registered) {
+
+            return res.status(400).json({
+                error: 'Already connected to WhatsApp.'
+            });
+
+        }
+
+        if (global.pairingInProgress) {
+
+            return res.status(429).json({
+                error: 'A pairing request is already in progress.'
+            });
+
+        }
+
+        global.pairingInProgress = true;
+
+        const sock =
+            await startWhatsApp({ forcePairing: true });
+
+        if (!sock) {
+
+            global.pairingInProgress = false;
+
+            return res.status(500).json({
+                error: 'Failed to initialize WhatsApp socket.'
+            });
+
+        }
+
+        const code =
+            await sock.requestPairingCode(number);
+
+        global.pairingInProgress = false;
+
+        res.json({
+            pairingCode: code,
+            number
+        });
+
+    } catch (error) {
+
+        global.pairingInProgress = false;
+
+        console.error(
+            '❌ Pairing code request failed:',
+            error.message
+        );
+
+        res.status(500).json({
+            error: error.message
+        });
+
+    }
+
+});
+
+// ------------------------------------------------------------
+// SESSION RESET API
+// ------------------------------------------------------------
+
+app.post('/api/reset-session', async (req, res) => {
+
+    try {
+
+        await deleteSession();
+
+        if (global.whatsappSocket) {
+
+            try {
+                global.whatsappSocket.end(undefined);
+            } catch (_) {}
+
+            global.whatsappSocket = null;
+
+        }
+
+        res.json({ success: true });
+
+    } catch (error) {
+
+        res.status(500).json({
+            error: error.message
+        });
+
+    }
+
+});
+
+// ------------------------------------------------------------
+// SOCKET.IO
+// ------------------------------------------------------------
+
+io.on('connection', (socket) => {
+
+    console.log(
+        '🔗 Dashboard client connected'
+    );
+
+    socket.emit(
+        'status',
+        {
+            connected: !!global.whatsappSocket
+        }
+    );
+
+    socket.on('disconnect', () => {
+
+        console.log(
+            '🔌 Dashboard client disconnected'
+        );
+
     });
 
 });
@@ -557,7 +701,7 @@ function scheduleReconnect(delay = 10000) {
 // START WHATSAPP
 // ------------------------------------------------------------
 
-async function startWhatsApp() {
+async function startWhatsApp(opts = {}) {
 
     // Prevent duplicate sockets
     if (global.isConnecting) {
@@ -582,7 +726,11 @@ async function startWhatsApp() {
         // LOAD SUPABASE SESSION
         // ----------------------------------------------------
 
-        await loadSessionFromSupabase();
+        if (!opts.forcePairing) {
+
+            await loadSessionFromSupabase();
+
+        }
 
         fs.ensureDirSync(
             SESSION_DIR
@@ -743,6 +891,56 @@ async function startWhatsApp() {
         );
 
         // ----------------------------------------------------
+        // INCOMING MESSAGES
+        // ----------------------------------------------------
+
+        sock.ev.on(
+            'messages.upsert',
+            async ({ messages, type }) => {
+
+                try {
+
+                    if (type !== 'notify') {
+                        return;
+                    }
+
+                    if (!global.commandsLoaded) {
+                        await initializeCommands();
+                    }
+
+                    for (const msg of messages) {
+
+                        if (!msg.message) continue;
+                        if (msg.key?.fromMe) continue;
+
+                        await processCommand(
+                            sock,
+                            msg,
+                            {
+                                prefix: PREFIX,
+                                botName: BOT_NAME,
+                                ownerNumbers: [
+                                    OWNER_NUMBER,
+                                    OWNER_NUMBER_2
+                                ]
+                            }
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '❌ Message handling error:',
+                        error
+                    );
+
+                }
+
+            }
+        );
+
+        // ----------------------------------------------------
         // CONNECTION UPDATE
         // ----------------------------------------------------
 
@@ -751,154 +949,4 @@ async function startWhatsApp() {
             async (update) => {
 
                 const {
-                    connection,
-                    lastDisconnect,
-                    qr,
-                    isNewLogin
-                } = update;
-
-                // --------------------------------------------
-                // QR CODE
-                // --------------------------------------------
-
-                if (qr) {
-
-                    console.log(
-                        '📱 QR Code generated'
-                    );
-
-                    io.emit(
-                        'qr',
-                        qr
-                    );
-
-                }
-
-                // --------------------------------------------
-                // NEW LOGIN
-                // --------------------------------------------
-
-                if (isNewLogin) {
-
-                    console.log(
-                        '🆕 New WhatsApp login detected.'
-                    );
-
-                }
-
-                // --------------------------------------------
-                // CONNECTING
-                // --------------------------------------------
-
-                if (
-                    connection ===
-                    'connecting'
-                ) {
-
-                    console.log(
-                        '🔌 Connecting to WhatsApp...'
-                    );
-
-                }
-
-                // --------------------------------------------
-                // OPEN
-                // --------------------------------------------
-
-                if (
-                    connection ===
-                    'open'
-                ) {
-
-                    global.isConnecting =
-                        false;
-
-                    global.whatsappSocket =
-                        sock;
-
-                    console.log(
-                        '✅ Adez MD connected to WhatsApp!'
-                    );
-
-                    io.emit(
-                        'connected',
-                        true
-                    );
-
-                    // Save immediately
-                    await saveSessionToSupabase();
-
-                    // ----------------------------------------
-                    // SEND OWNER NOTIFICATION
-                    // ----------------------------------------
-
-                    try {
-
-                        const owners = [
-                            OWNER_NUMBER,
-                            OWNER_NUMBER_2
-                        ];
-
-                        for (
-                            const number
-                            of owners
-                        ) {
-
-                            const clean =
-                                cleanPhoneNumber(
-                                    number
-                                );
-
-                            if (
-                                !validPhoneNumber(
-                                    clean
-                                )
-                            ) {
-                                continue;
-                            }
-
-                            const jid =
-                                `${clean}@s.whatsapp.net`;
-
-                            await sock.sendMessage(
-                                jid,
-                                {
-                                    text:
-                                        `✅ *${BOT_NAME}* is now online!\n\n` +
-                                        `📊 Status: Connected\n` +
-                                        `🕐 Time: ${new Date().toLocaleString()}\n\n` +
-                                        `Use *${PREFIX}menu* to see available commands.`
-                                }
-                            );
-
-                        }
-
-                        console.log(
-                            '📩 Owner notification sent'
-                        );
-
-                    } catch (error) {
-
-                        console.error(
-                            '❌ Owner notification failed:',
-                            error.message
-                        );
-
-                    }
-
-                }
-
-                // --------------------------------------------
-                // CLOSED
-                // --------------------------------------------
-
-                if (
-                    connection ===
-                    'close'
-                ) {
-
-                    global.isConnecting =
-                        false;
-
-                    if (
-                        global.whatsappSocke
+                    
