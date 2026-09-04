@@ -165,7 +165,7 @@ async function startWhatsApp() {
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['Adez MD', 'Chrome', '20.11.1'],
+        browser: ['WhatsApp', 'Chrome', '20.11.1'],
         syncFullHistory: false,
         fireInitQueries: false
     });
@@ -389,7 +389,7 @@ io.on('connection', (socket) => {
                             keys: makeCacheableSignalKeyStore(pairState.keys, pino({ level: 'silent' }))
                         },
                         logger: pino({ level: 'silent' }),
-                        browser: ['Adez MD', 'Chrome', '20.11.1'],
+                        browser: ['WhatsApp', 'Chrome', '20.11.1'],
                         syncFullHistory: false,
                         fireInitQueries: false
                     });
