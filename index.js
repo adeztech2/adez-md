@@ -165,7 +165,16 @@ async function startWhatsApp() {
         printQRInTerminal: false,
         browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
         syncFullHistory: false,
-        fireInitQueries: false
+        fireInitQueries: false,
+        connectTimeoutMs: 60000,
+        keepAliveIntervalMs: 30000,
+        markOnlineOnConnect: true,
+        generateHighQualityLinkPreview: false,
+        getMessage: async (key) => {
+            return {
+                conversation: 'Hello'
+            };
+        }
     });
     
     // Load commands (only once to prevent duplicates)
@@ -241,14 +250,14 @@ async function startWhatsApp() {
                 });
                 startWhatsApp();
             } else if (statusCode === 405) {
-                console.log('⚠️ Method Not Allowed (405). Waiting 15 seconds...');
-                setTimeout(() => startWhatsApp(), 15000);
+                console.log('⚠️ Method Not Allowed (405). Waiting 30 seconds...');
+                setTimeout(() => startWhatsApp(), 30000);
             } else if (statusCode === 408) {
                 console.log('⏰ Timeout detected (408). Waiting 30 seconds...');
                 setTimeout(() => startWhatsApp(), 30000);
             } else {
-                console.log('🔄 Reconnecting in 10 seconds...');
-                setTimeout(() => startWhatsApp(), 10000);
+                console.log('🔄 Reconnecting in 15 seconds...');
+                setTimeout(() => startWhatsApp(), 15000);
             }
         }
     });
@@ -390,7 +399,10 @@ io.on('connection', (socket) => {
                         logger: pino({ level: 'silent' }),
                         browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
                         syncFullHistory: false,
-                        fireInitQueries: false
+                        fireInitQueries: false,
+                        connectTimeoutMs: 60000,
+                        keepAliveIntervalMs: 30000,
+                        markOnlineOnConnect: true
                     });
                     
                     // Wait for connection update
@@ -489,8 +501,4 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (error) => {
-    console.error('❌ Unhandled Rejection:', error);
-});
-
-// Start the bot
-main();
+    console.error('❌ 
