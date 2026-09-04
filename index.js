@@ -165,7 +165,7 @@ async function startWhatsApp() {
         },
         logger: pino({ level: 'silent' }),
         printQRInTerminal: false,
-        browser: ['WhatsApp', 'Chrome', '120.0.0.0'],
+        browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
         syncFullHistory: false,
         fireInitQueries: false
     });
@@ -243,12 +243,8 @@ async function startWhatsApp() {
                 });
                 startWhatsApp();
             } else if (statusCode === 405) {
-                console.log('⚠️ Method Not Allowed (405). Using alternative connection...');
-                // Try alternative connection method
-                setTimeout(() => {
-                    console.log('🔄 Attempting alternative connection...');
-                    startWhatsApp();
-                }, 15000);
+                console.log('⚠️ Method Not Allowed (405). Waiting 15 seconds...');
+                setTimeout(() => startWhatsApp(), 15000);
             } else if (statusCode === 408) {
                 console.log('⏰ Timeout detected (408). Waiting 30 seconds...');
                 setTimeout(() => startWhatsApp(), 30000);
@@ -393,7 +389,7 @@ io.on('connection', (socket) => {
                             keys: makeCacheableSignalKeyStore(pairState.keys, pino({ level: 'silent' }))
                         },
                         logger: pino({ level: 'silent' }),
-                        browser: ['WhatsApp', 'Chrome', '120.0.0.0'],
+                        browser: ['Ubuntu', 'Chrome', '120.0.0.0'],
                         syncFullHistory: false,
                         fireInitQueries: false
                     });
