@@ -223,8 +223,10 @@
             <div class="pair-code">
                 <h3>📱 Your Pairing Code</h3>
                 <p>Enter this code in WhatsApp:</p>
-                <div class="code" id="pair-code">Loading...</div>
-                <button onclick="copyCode()" id="copy-btn">📋 Copy Code</button>
+                <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                    <div class="code" id="pair-code">Loading...</div>
+                    <button onclick="copyCode()" id="copy-btn" style="background: #00ff88; color: #0a0a0a; border: none; padding: 8px 12px; border-radius: 5px; cursor: pointer; font-size: 14px;">📋</button>
+                </div>
                 <p style="color: #00ff88; font-weight: bold; margin-top: 10px;">Valid for 60 seconds</p>
             </div>
         </div>
@@ -275,7 +277,7 @@
         
         socket.on('pair-code', (code) => {
             console.log('Received pair code:', code);
-            statusDiv.innerHTML = `<p style="color: #00ff88;">✅ Pair code generated!</p>`;
+            statusDiv.innerHTML = '<p style="color: #00ff88;">✅ Pair code generated!</p>';
             statusDiv.className = 'success';
             pairCodeSection.style.display = 'block';
             pairCode.textContent = code;
@@ -349,16 +351,15 @@
             const code = document.getElementById('pair-code').textContent;
             navigator.clipboard.writeText(code).then(() => {
                 const copyBtn = document.getElementById('copy-btn');
-                copyBtn.textContent = '✅ Copied!';
+                copyBtn.textContent = '✅';
                 copyBtn.style.background = '#00cc6a';
                 
                 setTimeout(() => {
-                    copyBtn.textContent = '📋 Copy Code';
+                    copyBtn.textContent = '📋';
                     copyBtn.style.background = '#00ff88';
                 }, 2000);
             }).catch(err => {
                 console.error('Failed to copy:', err);
-                // Fallback for older browsers
                 const textarea = document.createElement('textarea');
                 textarea.value = code;
                 document.body.appendChild(textarea);
@@ -367,11 +368,11 @@
                 document.body.removeChild(textarea);
                 
                 const copyBtn = document.getElementById('copy-btn');
-                copyBtn.textContent = '✅ Copied!';
+                copyBtn.textContent = '✅';
                 copyBtn.style.background = '#00cc6a';
                 
                 setTimeout(() => {
-                    copyBtn.textContent = '📋 Copy Code';
+                    copyBtn.textContent = '📋';
                     copyBtn.style.background = '#00ff88';
                 }, 2000);
             });
