@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Adez MD - Pair Code</title>
+    <title>ADEZ MD - Pair Code</title>
     <style>
         * {
             margin: 0;
@@ -12,219 +12,255 @@
         }
         body {
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            background: #0a0a0a;
             min-height: 100vh;
             display: flex;
             justify-content: center;
             align-items: center;
             padding: 20px;
+            color: #ffffff;
         }
         .container {
-            background: white;
+            background: linear-gradient(145deg, #1a1a1a, #0d0d0d);
+            border: 1px solid #333;
             border-radius: 20px;
             padding: 40px;
             max-width: 500px;
             width: 100%;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            box-shadow: 0 20px 60px rgba(0,0,0,0.5);
             text-align: center;
         }
         .logo {
             font-size: 48px;
-            margin-bottom: 20px;
+            margin-bottom: 10px;
         }
         h1 {
-            color: #667eea;
+            color: #00ff88;
             margin-bottom: 10px;
-            font-size: 28px;
+            font-size: 32px;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            text-shadow: 0 0 20px rgba(0,255,136,0.3);
+        }
+        .powered-by {
+            font-size: 14px;
+            color: #888;
+            margin-bottom: 30px;
+        }
+        .powered-by a {
+            color: #00ff88;
+            text-decoration: none;
+            font-weight: bold;
+        }
+        .powered-by a:hover {
+            text-decoration: underline;
         }
         p {
-            color: #666;
-            margin-bottom: 30px;
-            line-height: 1.6;
-        }
-        #qr-container {
-            background: #f5f5f5;
-            border-radius: 10px;
-            padding: 20px;
+            color: #aaa;
             margin-bottom: 20px;
-            min-height: 250px;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-        }
-        #qr-code {
-            width: 250px;
-            height: 250px;
-            object-fit: contain;
+            line-height: 1.6;
         }
         #status {
             padding: 15px;
             border-radius: 10px;
             margin-top: 20px;
             font-weight: bold;
+            border: 1px solid #333;
         }
         .loading {
-            background: #f0f0f0;
-            color: #666;
+            background: #1a1a1a;
+            color: #888;
         }
         .success {
-            background: #d4edda;
-            color: #155724;
+            background: #0d2818;
+            color: #00ff88;
+            border-color: #00ff88;
         }
         .error {
-            background: #f8d7da;
-            color: #721c24;
+            background: #2d0a0a;
+            color: #ff4444;
+            border-color: #ff4444;
         }
         .pair-code {
-            background: #e8f4fd;
-            border: 2px dashed #3498db;
+            background: #0d2818;
+            border: 2px dashed #00ff88;
             border-radius: 10px;
             padding: 20px;
             margin: 20px 0;
         }
         .pair-code h3 {
-            color: #3498db;
+            color: #00ff88;
             margin-bottom: 10px;
         }
         .pair-code .code {
-            font-size: 24px;
+            font-size: 36px;
             font-weight: bold;
-            color: #333;
-            letter-spacing: 2px;
-            margin: 10px 0;
+            color: #ffffff;
+            letter-spacing: 5px;
+            margin: 15px 0;
+            text-shadow: 0 0 10px rgba(0,255,136,0.5);
         }
         .instructions {
             text-align: left;
-            background: #f8f9fa;
+            background: #1a1a1a;
             border-radius: 10px;
             padding: 20px;
             margin-top: 20px;
+            border: 1px solid #333;
         }
         .instructions h3 {
             margin-bottom: 10px;
-            color: #333;
+            color: #00ff88;
         }
         .instructions ol {
             margin-left: 20px;
-            color: #666;
+            color: #aaa;
         }
         .instructions li {
             margin-bottom: 8px;
         }
         button {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
+            background: linear-gradient(135deg, #00ff88, #00cc6a);
+            color: #0a0a0a;
             border: none;
-            padding: 12px 30px;
+            padding: 15px 30px;
             border-radius: 25px;
             font-size: 16px;
+            font-weight: bold;
             cursor: pointer;
             margin-top: 20px;
-            transition: transform 0.3s;
+            transition: all 0.3s;
+            width: 100%;
+            max-width: 300px;
         }
         button:hover {
             transform: scale(1.05);
+            box-shadow: 0 0 20px rgba(0,255,136,0.3);
         }
-        #reconnect {
-            background: #e74c3c;
-            display: none;
-            margin-top: 10px;
+        button:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .refresh-btn {
+            background: #333;
+            color: #fff;
+        }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #666;
+        }
+        .footer a {
+            color: #00ff88;
+            text-decoration: none;
         }
     </style>
 </head>
 <body>
     <div class="container">
         <div class="logo">🤖</div>
-        <h1>Adez MD</h1>
-        <p>Scan the QR code to connect your bot to WhatsApp</p>
+        <h1>ADEZ MD</h1>
+        <div class="powered-by">Powered by <a href="https://github.com/adeztech2">ADEZ TECH</a></div>
+        <p>Get a pairing code to connect your bot</p>
         
-        <div id="qr-container">
-            <div id="status" class="loading">
-                <p>Connecting to server...</p>
-            </div>
-            <img id="qr-code" alt="QR Code" style="display: none;">
+        <div id="status" class="loading">
+            <p>Ready to generate pairing code...</p>
         </div>
         
         <div id="pair-code-section" style="display: none;">
             <div class="pair-code">
-                <h3>📱 Pair Code</h3>
+                <h3>📱 Your Pairing Code</h3>
                 <p>Enter this code in WhatsApp:</p>
                 <div class="code" id="pair-code">Loading...</div>
-                <p>Go to WhatsApp > Linked Devices > Link with Phone Number</p>
+                <p style="color: #00ff88; font-weight: bold;">Valid for 60 seconds</p>
             </div>
         </div>
         
         <div class="instructions">
             <h3>📖 How to connect:</h3>
             <ol>
+                <li>Tap the "Get Pair Code" button below</li>
+                <li>Copy the 8-digit code</li>
                 <li>Open WhatsApp on your phone</li>
                 <li>Go to Settings > Linked Devices</li>
-                <li>Tap "Link a Device"</li>
-                <li>Scan the QR code above</li>
-                <li>Or use the pair code method</li>
+                <li>Tap "Link with Phone Number"</li>
+                <li>Enter the code</li>
+                <li>Wait for bot to connect!</li>
             </ol>
         </div>
         
-        <button onclick="window.location.reload()">🔄 Refresh Page</button>
-        <button id="reconnect" onclick="reconnect()">🔌 Reconnect Bot</button>
+        <button id="pair-code-btn" onclick="getPairCode()">📱 Get Pair Code</button>
+        <button class="refresh-btn" onclick="window.location.reload()" style="display: none;" id="refresh-btn">🔄 Refresh Page</button>
+        
+        <div class="footer">
+            <p>© 2026 <a href="https://github.com/adeztech2">ADEZ TECH</a> | All Rights Reserved</p>
+            <p>ADEZ MD - Advanced WhatsApp Bot</p>
+        </div>
     </div>
 
     <script src="/socket.io/socket.io.js"></script>
     <script>
         const socket = io();
         const statusDiv = document.getElementById('status');
-        const qrCode = document.getElementById('qr-code');
         const pairCodeSection = document.getElementById('pair-code-section');
         const pairCode = document.getElementById('pair-code');
-        const reconnectBtn = document.getElementById('reconnect');
+        const pairCodeBtn = document.getElementById('pair-code-btn');
+        const refreshBtn = document.getElementById('refresh-btn');
         
         socket.on('connect', () => {
             console.log('Connected to server');
         });
         
-        socket.on('qr', (qr) => {
-            console.log('Received QR code');
-            statusDiv.innerHTML = '<p style="color: #666;">📱 Waiting for scan...</p>';
-            statusDiv.className = 'loading';
-            qrCode.style.display = 'block';
-            pairCodeSection.style.display = 'none';
-            
-            // Display QR code using a simple method
-            // You can also use a QR code library to render it properly
-            qrCode.src = 'https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(qr);
-        });
-        
         socket.on('pair-code', (code) => {
-            console.log('Received pair code');
-            statusDiv.innerHTML = '<p style="color: #666;">📱 Enter pair code in WhatsApp</p>';
-            statusDiv.className = 'loading';
-            qrCode.style.display = 'none';
+            console.log('Received pair code:', code);
+            statusDiv.innerHTML = '<p style="color: #00ff88;">✅ Pair code generated!</p>';
+            statusDiv.className = 'success';
             pairCodeSection.style.display = 'block';
             pairCode.textContent = code;
+            pairCodeBtn.disabled = true;
+            pairCodeBtn.textContent = '✅ Code Generated';
+            
+            // Show refresh button after 60 seconds
+            setTimeout(() => {
+                refreshBtn.style.display = 'block';
+            }, 60000);
         });
         
         socket.on('connected', (data) => {
-            statusDiv.innerHTML = '<p style="color: #155724;">✅ Bot is connected to WhatsApp!</p>';
+            statusDiv.innerHTML = '<p style="color: #00ff88;">✅ Bot is connected to WhatsApp!</p>';
             statusDiv.className = 'success';
-            qrCode.style.display = 'none';
             pairCodeSection.style.display = 'none';
-            reconnectBtn.style.display = 'block';
+            pairCodeBtn.disabled = true;
+            pairCodeBtn.textContent = '✅ Connected';
+        });
+        
+        socket.on('error', (message) => {
+            statusDiv.innerHTML = `<p style="color: #ff4444;">❌ Error: ${message}</p>`;
+            statusDiv.className = 'error';
         });
         
         socket.on('disconnect', () => {
-            statusDiv.innerHTML = '<p style="color: #721c24;">❌ Connection lost to server. Refreshing...</p>';
+            statusDiv.innerHTML = '<p style="color: #ff4444;">❌ Connection lost. Refreshing...</p>';
             statusDiv.className = 'error';
             setTimeout(() => window.location.reload(), 3000);
         });
         
-        function reconnect() {
-            reconnectBtn.textContent = '🔄 Reconnecting...';
-            reconnectBtn.disabled = true;
-            socket.emit('reconnect-request');
+        function getPairCode() {
+            pairCodeBtn.disabled = true;
+            pairCodeBtn.textContent = '⏳ Generating...';
+            statusDiv.innerHTML = '<p style="color: #888;">📱 Generating pair code...</p>';
+            statusDiv.className = 'loading';
+            
+            socket.emit('request-pair-code');
+            
+            // Re-enable button after 10 seconds if no response
             setTimeout(() => {
-                reconnectBtn.textContent = '🔌 Reconnect Bot';
-                reconnectBtn.disabled = false;
-            }, 5000);
+                pairCodeBtn.disabled = false;
+                pairCodeBtn.textContent = '📱 Get Pair Code';
+            }, 10000);
         }
     </script>
 </body>
