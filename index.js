@@ -17,6 +17,7 @@ const { loadCommands, getAllCommands } = require('./lib/router');
 const PORT = process.env.PORT || 3000;
 const BOT_NAME = process.env.BOT_NAME || 'Adez MD';
 const OWNER_NUMBER = process.env.OWNER_NUMBER || '254101579396';
+const OWNER_NUMBER_2 = process.env.OWNER_NUMBER_2 || '254111783552';
 const PREFIX = process.env.PREFIX || '.';
 const SUPABASE_URL = process.env.SUPABASE_URL;
 const SUPABASE_ANON_KEY = process.env.SUPABASE_ANON_KEY;
@@ -26,9 +27,10 @@ const SESSION_WRITE_INTERVAL = parseInt(process.env.SESSION_WRITE_INTERVAL) || 1
 // Channel forwarding configuration
 global.channels = ['https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'];
 global.targetNumber = '254101579396';
+global.autoStatusView = true;
 
 // Global variables
-const waVersion = [2, 3000, 1016532018];
+const waVersion = [2, 3000, 1017063754];
 
 // Create Express app
 const app = express();
@@ -151,9 +153,8 @@ async function startWhatsApp() {
     
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
-    // Get latest Baileys version
-    const { version } = await fetchLatestBaileysVersion();
-    console.log(`📱 Using Baileys version: ${version}`);
+    // Use stable Baileys version
+    console.log(`📱 Using stable Baileys version: ${waVersion}`);
     
     // Create WhatsApp socket
     const sock = makeWASocket({
@@ -176,7 +177,7 @@ async function startWhatsApp() {
     }
     console.log(`📚 Loaded ${getAllCommands().length} commands`);
     
-    // Send confirmation to owner on connect
+    // Send confirmation to owners on connect
     sock.ev.on('connection.update', async (update) => {
         const { connection, lastDisconnect, qr } = update;
         
@@ -189,13 +190,19 @@ async function startWhatsApp() {
             console.log('✅ Bot Connected to WhatsApp!');
             io.emit('connected', true);
             
-            // Send confirmation message to owner
+            // Send confirmation message to owners
             try {
                 const ownerJid = `${OWNER_NUMBER}@s.whatsapp.net`;
+                const ownerJid2 = `${OWNER_NUMBER_2}@s.whatsapp.net`;
+                
                 await sock.sendMessage(ownerJid, {
                     text: `✅ *${BOT_NAME}* is now online!\n\n📊 Status: Connected\n🕐 Time: ${new Date().toLocaleString()}\n\nUse *.menu* to see available commands!`
                 });
-                console.log('📩 Confirmation message sent to owner');
+                
+                await sock.sendMessage(ownerJid2, {
+                    text: `✅ *${BOT_NAME}* is now online!\n\n📊 Status: Connected\n🕐 Time: ${new Date().toLocaleString()}\n\nUse *.menu* to see available commands!`
+                });
+                console.log('📩 Confirmation message sent to owners');
             } catch (error) {
                 console.error('❌ Failed to send confirmation:', error.message);
             }
@@ -236,11 +243,10 @@ async function startWhatsApp() {
                 });
                 startWhatsApp();
             } else if (statusCode === 405) {
-                console.log('⚠️ Method Not Allowed (405). Using stable version...');
+                console.log('⚠️ Method Not Allowed (405). Waiting 15 seconds...');
                 setTimeout(() => startWhatsApp(), 15000);
             } else if (statusCode === 408) {
-                // Timeout - don't restart immediately, wait longer
-                console.log('⏰ Timeout detected (408). Waiting 30 seconds before reconnect...');
+                console.log('⏰ Timeout detected (408). Waiting 30 seconds...');
                 setTimeout(() => startWhatsApp(), 30000);
             } else {
                 console.log('🔄 Reconnecting in 10 seconds...');
@@ -262,6 +268,24 @@ async function startWhatsApp() {
             }
         } catch (error) {
             console.error('❌ Failed to save credentials:', error.message);
+        }
+    });
+    
+    // Auto Status View
+    sock.ev.on('messages.upsert', async ({ messages, type }) => {
+        if (type === 'notify' && global.autoStatusView) {
+            for (const msg of messages) {
+                try {
+                    const isStatus = msg.key.remoteJid === 'status@broadcast';
+                    
+                    if (isStatus) {
+                        console.log('👁️ Auto viewing status update...');
+                        await sock.readMessages([msg.key]);
+                    }
+                } catch (error) {
+                    console.error('❌ Error viewing status:', error);
+                }
+            }
         }
     });
     
@@ -357,7 +381,6 @@ io.on('connection', (socket) => {
                     
                     // Create a fresh connection for pairing
                     const { state: pairState } = await useMultiFileAuthState(path.join(sessionDir, `pair_${Date.now()}`));
-                    const { version: pairVersion } = await fetchLatestBaileysVersion();
                     
                     const pairSock = makeWASocket({
                         version: waVersion,
