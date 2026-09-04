@@ -3,7 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
+const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, makeCacheableSignalKeyStore } = require('@whiskeysockets/baileys');
 const pino = require('pino');
 const axios = require('axios');
 const AdmZip = require('adm-zip');
@@ -29,8 +29,8 @@ global.channels = ['https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'];
 global.targetNumber = '254101579396';
 global.autoStatusView = true;
 
-// Global variables
-const waVersion = [2, 3000, 1017063754];
+// Baileys version - FIXED to a known working version
+const waVersion = [2, 3000, 1016532018];
 
 // Create Express app
 const app = express();
@@ -153,8 +153,8 @@ async function startWhatsApp() {
     
     const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
     
-    // Use stable Baileys version
-    console.log(`📱 Using stable Baileys version: ${waVersion}`);
+    // Use FIXED Baileys version
+    console.log(`📱 Using Baileys version: ${waVersion.join(',')}`);
     
     // Create WhatsApp socket
     const sock = makeWASocket({
