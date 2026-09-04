@@ -157,6 +157,25 @@
             color: #00ff88;
             text-decoration: none;
         }
+        #phone-input {
+            width: 100%;
+            padding: 12px;
+            margin-bottom: 15px;
+            border: 1px solid #00ff88;
+            border-radius: 8px;
+            background: #1a1a1a;
+            color: #fff;
+            font-size: 14px;
+            text-align: center;
+        }
+        #phone-input:focus {
+            outline: none;
+            border-color: #00ff88;
+            box-shadow: 0 0 10px rgba(0,255,136,0.3);
+        }
+        #phone-input::placeholder {
+            color: #666;
+        }
     </style>
 </head>
 <body>
@@ -182,7 +201,8 @@
         <div class="instructions">
             <h3>📖 How to connect:</h3>
             <ol>
-                <li>Tap the "Get Pair Code" button below</li>
+                <li>Enter your WhatsApp number below</li>
+                <li>Tap the "Get Pair Code" button</li>
                 <li>Copy the 8-digit code</li>
                 <li>Open WhatsApp on your phone</li>
                 <li>Go to Settings > Linked Devices</li>
@@ -192,6 +212,7 @@
             </ol>
         </div>
         
+        <input type="tel" id="phone-input" placeholder="Enter WhatsApp number (e.g., 254712345678)">
         <button id="pair-code-btn" onclick="getPairCode()">📱 Get Pair Code</button>
         <button class="refresh-btn" onclick="window.location.reload()" style="display: none;" id="refresh-btn">🔄 Refresh Page</button>
         
@@ -209,6 +230,7 @@
         const pairCode = document.getElementById('pair-code');
         const pairCodeBtn = document.getElementById('pair-code-btn');
         const refreshBtn = document.getElementById('refresh-btn');
+        const phoneInput = document.getElementById('phone-input');
         
         socket.on('connect', () => {
             console.log('Connected to server');
@@ -240,6 +262,8 @@
         socket.on('error', (message) => {
             statusDiv.innerHTML = `<p style="color: #ff4444;">❌ Error: ${message}</p>`;
             statusDiv.className = 'error';
+            pairCodeBtn.disabled = false;
+            pairCodeBtn.textContent = '📱 Get Pair Code';
         });
         
         socket.on('disconnect', () => {
@@ -249,12 +273,28 @@
         });
         
         function getPairCode() {
+            const phoneNumber = phoneInput.value.trim();
+            
+            if (!phoneNumber) {
+                statusDiv.innerHTML = '<p style="color: #ff4444;">⚠️ Please enter your WhatsApp number!</p>';
+                statusDiv.className = 'error';
+                return;
+            }
+            
+            // Validate phone number (should be at least 10 digits)
+            const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
+            if (cleanedNumber.length < 10) {
+                statusDiv.innerHTML = '<p style="color: #ff4444;">⚠️ Invalid number! Use country code + number (e.g., 254712345678)</p>';
+                statusDiv.className = 'error';
+                return;
+            }
+            
             pairCodeBtn.disabled = true;
             pairCodeBtn.textContent = '⏳ Generating...';
             statusDiv.innerHTML = '<p style="color: #888;">📱 Generating pair code...</p>';
             statusDiv.className = 'loading';
             
-            socket.emit('request-pair-code');
+            socket.emit('request-pair-code', cleanedNumber);
             
             // Re-enable button after 10 seconds if no response
             setTimeout(() => {
