@@ -1,0 +1,17 @@
+{
+  "name": "Adez MD",
+  "description": "WhatsApp bot",
+  "keywords": ["whatsapp", "bot", "baileys"],
+  "repository": "https://github.com/adeztech2/adez-md",
+  "env": {
+    "BOT_NAME": { "description": "Bot name", "value": "Adez MD" },
+    "OWNER_NUMBER": { "description": "Owner WhatsApp number", "value": "254101579396" },
+    "PREFIX": { "description": "Command prefix", "value": "." }
+  },
+  "buildpacks": [
+    { "url": "heroku/nodejs" },
+    { "url": "https://github.com/jonathanong/heroku-buildpack-ffmpeg-latest" },
+    { "url": "https://github.com/clhuang/heroku-buildpack-webp-binaries" }
+  ],
+  "stack": "heroku-22"
+}
