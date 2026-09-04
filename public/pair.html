@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADEZ MD - Pair Code</title>
+    <title>ADEZ MD - Pair Code & QR</title>
     <style>
         * {
             margin: 0;
@@ -52,9 +52,6 @@
             text-decoration: none;
             font-weight: bold;
         }
-        .powered-by a:hover {
-            text-decoration: underline;
-        }
         p {
             color: #aaa;
             margin-bottom: 20px;
@@ -80,6 +77,21 @@
             background: #2d0a0a;
             color: #ff4444;
             border-color: #ff4444;
+        }
+        #qr-container {
+            background: #ffffff;
+            border-radius: 10px;
+            padding: 20px;
+            margin: 20px 0;
+            min-height: 250px;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #qr-code {
+            width: 250px;
+            height: 250px;
+            object-fit: contain;
         }
         .pair-code {
             background: #0d2818;
@@ -146,17 +158,6 @@
             background: #333;
             color: #fff;
         }
-        .footer {
-            margin-top: 30px;
-            padding-top: 20px;
-            border-top: 1px solid #333;
-            font-size: 12px;
-            color: #666;
-        }
-        .footer a {
-            color: #00ff88;
-            text-decoration: none;
-        }
         #phone-input {
             width: 100%;
             padding: 12px;
@@ -176,6 +177,37 @@
         #phone-input::placeholder {
             color: #666;
         }
+        .footer {
+            margin-top: 30px;
+            padding-top: 20px;
+            border-top: 1px solid #333;
+            font-size: 12px;
+            color: #666;
+        }
+        .footer a {
+            color: #00ff88;
+            text-decoration: none;
+        }
+        .tabs {
+            display: flex;
+            margin-bottom: 20px;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        .tab {
+            flex: 1;
+            padding: 12px;
+            background: #1a1a1a;
+            color: #888;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        .tab.active {
+            background: #00ff88;
+            color: #0a0a0a;
+        }
     </style>
 </head>
 <body>
@@ -183,10 +215,27 @@
         <div class="logo">🤖</div>
         <h1>ADEZ MD</h1>
         <div class="powered-by">Powered by <a href="https://github.com/adeztech2">ADEZ TECH</a></div>
-        <p>Get a pairing code to connect your bot</p>
+        <p>Connect your bot to WhatsApp</p>
+        
+        <div class="tabs">
+            <button class="tab active" onclick="showTab('qr')">QR Code</button>
+            <button class="tab" onclick="showTab('pair')">Pair Code</button>
+        </div>
+        
+        <div id="qr-tab" class="tab-content">
+            <div id="qr-container">
+                <p style="color: #888;">Waiting for QR code...</p>
+            </div>
+            <p>Scan QR code with WhatsApp</p>
+        </div>
+        
+        <div id="pair-tab" class="tab-content" style="display: none;">
+            <input type="tel" id="phone-input" placeholder="Enter WhatsApp number (e.g., 254712345678)">
+            <button id="pair-code-btn" onclick="getPairCode()">📱 Get Pair Code</button>
+        </div>
         
         <div id="status" class="loading">
-            <p>Ready to generate pairing code...</p>
+            <p>Waiting for connection...</p>
         </div>
         
         <div id="pair-code-section" style="display: none;">
@@ -201,20 +250,14 @@
         <div class="instructions">
             <h3>📖 How to connect:</h3>
             <ol>
-                <li>Enter your WhatsApp number below</li>
-                <li>Tap the "Get Pair Code" button</li>
-                <li>Copy the 8-digit code</li>
-                <li>Open WhatsApp on your phone</li>
-                <li>Go to Settings > Linked Devices</li>
-                <li>Tap "Link with Phone Number"</li>
-                <li>Enter the code</li>
-                <li>Wait for bot to connect!</li>
+                <li>Use QR Code tab (scan with phone)</li>
+                <li>OR use Pair Code tab (enter code)</li>
+                <li>Open WhatsApp > Settings > Linked Devices</li>
+                <li>Link a Device or Link with Phone Number</li>
             </ol>
         </div>
         
-        <input type="tel" id="phone-input" placeholder="Enter WhatsApp number (e.g., 254712345678)">
-        <button id="pair-code-btn" onclick="getPairCode()">📱 Get Pair Code</button>
-        <button class="refresh-btn" onclick="window.location.reload()" style="display: none;" id="refresh-btn">🔄 Refresh Page</button>
+        <button id="refresh-btn" class="refresh-btn" onclick="window.location.reload()" style="display: none;">🔄 Refresh Page</button>
         
         <div class="footer">
             <p>© 2026 <a href="https://github.com/adeztech2">ADEZ TECH</a> | All Rights Reserved</p>
@@ -226,14 +269,40 @@
     <script>
         const socket = io();
         const statusDiv = document.getElementById('status');
+        const qrContainer = document.getElementById('qr-container');
+        const qrCode = document.getElementById('qr-code');
         const pairCodeSection = document.getElementById('pair-code-section');
         const pairCode = document.getElementById('pair-code');
         const pairCodeBtn = document.getElementById('pair-code-btn');
         const refreshBtn = document.getElementById('refresh-btn');
         const phoneInput = document.getElementById('phone-input');
         
+        // Tab switching
+        function showTab(tab) {
+            const tabs = document.querySelectorAll('.tab');
+            const contents = document.querySelectorAll('.tab-content');
+            
+            tabs.forEach(t => t.classList.remove('active'));
+            contents.forEach(c => c.style.display = 'none');
+            
+            if (tab === 'qr') {
+                tabs[0].classList.add('active');
+                document.getElementById('qr-tab').style.display = 'block';
+            } else {
+                tabs[1].classList.add('active');
+                document.getElementById('pair-tab').style.display = 'block';
+            }
+        }
+        
         socket.on('connect', () => {
             console.log('Connected to server');
+        });
+        
+        socket.on('qr', (qr) => {
+            console.log('Received QR code');
+            qrContainer.innerHTML = '<img id="qr-code" src="https://api.qrserver.com/v1/create-qr-code/?size=250x250&data=' + encodeURIComponent(qr) + '" alt="QR Code">';
+            statusDiv.innerHTML = '<p style="color: #888;">📱 Waiting for scan...</p>';
+            statusDiv.className = 'loading';
         });
         
         socket.on('pair-code', (code) => {
@@ -244,19 +313,17 @@
             pairCode.textContent = code;
             pairCodeBtn.disabled = true;
             pairCodeBtn.textContent = '✅ Code Generated';
-            
-            // Show refresh button after 60 seconds
-            setTimeout(() => {
-                refreshBtn.style.display = 'block';
-            }, 60000);
+            refreshBtn.style.display = 'block';
         });
         
         socket.on('connected', (data) => {
             statusDiv.innerHTML = '<p style="color: #00ff88;">✅ Bot is connected to WhatsApp!</p>';
             statusDiv.className = 'success';
+            qrContainer.innerHTML = '<p style="color: #00ff88;">✅ Connected!</p>';
             pairCodeSection.style.display = 'none';
             pairCodeBtn.disabled = true;
             pairCodeBtn.textContent = '✅ Connected';
+            refreshBtn.style.display = 'block';
         });
         
         socket.on('error', (message) => {
@@ -281,7 +348,6 @@
                 return;
             }
             
-            // Validate phone number (should be at least 10 digits)
             const cleanedNumber = phoneNumber.replace(/[^0-9]/g, '');
             if (cleanedNumber.length < 10) {
                 statusDiv.innerHTML = '<p style="color: #ff4444;">⚠️ Invalid number! Use country code + number (e.g., 254712345678)</p>';
@@ -296,7 +362,6 @@
             
             socket.emit('request-pair-code', cleanedNumber);
             
-            // Re-enable button after 10 seconds if no response
             setTimeout(() => {
                 pairCodeBtn.disabled = false;
                 pairCodeBtn.textContent = '📱 Get Pair Code';
