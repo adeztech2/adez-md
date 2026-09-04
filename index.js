@@ -360,19 +360,22 @@ io.on('connection', (socket) => {
                     
                     // Wait for connection update
                     await new Promise((resolve) => {
-                        pairSock.ev.once('connection.update', async (update) => {
+                        const onUpdate = (update) => {
                             const { connection, lastDisconnect } = update;
                             
                             if (connection === 'open') {
                                 console.log('✅ Pair connection established');
                                 io.emit('connected', true);
+                                pairSock.ev.off('connection.update', onUpdate);
                                 resolve();
                             } else if (connection === 'close') {
                                 const statusCode = lastDisconnect?.error?.output?.statusCode;
                                 console.log(`⚠️ Pair connection closed with status: ${statusCode}`);
+                                pairSock.ev.off('connection.update', onUpdate);
                                 resolve();
                             }
-                        });
+                        };
+                        pairSock.ev.on('connection.update', onUpdate);
                     });
                     
                     // Request pairing code
