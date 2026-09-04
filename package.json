@@ -20,6 +20,7 @@
     "qrcode-terminal": "^0.12.0",
     "pino": "^8.17.2",
     "fs-extra": "^11.2.0",
-    "ytdl-core": "^4.11.5"
+    "ytdl-core": "^4.11.5",
+    "jimp": "^0.22.10"
   }
 }
