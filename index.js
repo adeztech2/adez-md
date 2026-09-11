@@ -28,6 +28,8 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 let sock;
 let isConnected = false;
+let lastQR = null;
+let lastPairCode = null;
 let lastSupabaseWrite = 0;
 const SUPABASE_WRITE_INTERVAL = 2 * 60 * 1000; // 2 minutes throttle
 
@@ -118,11 +120,14 @@ async function startBot() {
     if (qr) {
       console.log('📱 New QR generated, sending to pair page...');
       const qrImage = await QRCode.toDataURL(qr);
+      lastQR = qrImage;
       io.emit('qr', qrImage);
     }
 
     if (connection === 'open') {
       isConnected = true;
+      lastQR = null;
+      lastPairCode = null;
       console.log('✅ Bot connected to WhatsApp!');
       io.emit('connected');
       await saveSessionToSupabase();
@@ -173,10 +178,19 @@ async function startBot() {
 io.on('connection', (socket) => {
   console.log('🌐 Pair page opened.');
 
+  // Immediately send the latest QR/code, if one already exists
+  if (lastQR && !isConnected) {
+    socket.emit('qr', lastQR);
+  }
+  if (lastPairCode && !isConnected) {
+    socket.emit('pairing-code', lastPairCode);
+  }
+
   socket.on('request-pair-code', async (number) => {
     if (!sock) return;
     try {
       const code = await sock.requestPairingCode(number.replace(/[^0-9]/g, ''));
+      lastPairCode = code;
       socket.emit('pairing-code', code);
       console.log(`🔑 Pairing code generated: ${code}`);
     } catch (err) {
