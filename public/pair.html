@@ -2,79 +2,296 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>ADEZ MD - Pair</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ADEZ MD - Link Hub</title>
 <style>
+  :root {
+    --bg: #0a0e0d;
+    --card: #121816;
+    --card-inner: #161d1b;
+    --accent: #22c55e;
+    --accent-dim: #16281f;
+    --text: #f3f4f6;
+    --text-dim: #9ca3af;
+    --border: #1f2a27;
+  }
+  * { box-sizing: border-box; }
   body {
-    background: #111827;
-    color: #f3f4f6;
-    font-family: sans-serif;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
     margin: 0;
+    padding: 24px 16px;
+    display: flex;
+    justify-content: center;
   }
-  h1 { margin-bottom: 4px; }
-  #status { color: #9ca3af; margin-bottom: 16px; }
-  #qrbox { background: white; padding: 16px; border-radius: 8px; }
-  #qrbox img { display: block; width: 260px; height: 260px; }
-  #codebox {
-    margin-top: 16px;
-    font-size: 22px;
-    letter-spacing: 3px;
-    background: #1f2937;
-    padding: 10px 20px;
-    border-radius: 6px;
-    display: none;
+  .container { width: 100%; max-width: 420px; }
+
+  .card {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px;
   }
-  input, button {
-    padding: 8px 12px;
-    margin-top: 10px;
-    border-radius: 6px;
-    border: none;
+
+  .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 16px;
+    border-bottom: 2px solid var(--accent);
+    margin-bottom: 20px;
   }
-  button {
-    background: #22c55e;
-    color: white;
+  .header-left { display: flex; align-items: center; gap: 12px; }
+  .header-left .icon { font-size: 28px; }
+  .header-left h1 { font-size: 20px; margin: 0; }
+  .header-left h1 span { color: var(--accent); }
+  .header-left p { font-size: 12px; color: var(--text-dim); margin: 2px 0 0; }
+
+  .toggle-switch {
+    width: 44px; height: 24px;
+    background: var(--card-inner);
+    border-radius: 12px;
+    display: flex;
+    align-items: center;
+    padding: 2px;
     cursor: pointer;
   }
+  .toggle-switch .knob {
+    width: 20px; height: 20px;
+    background: var(--text-dim);
+    border-radius: 50%;
+    transition: transform 0.2s;
+  }
+
+  .section-label {
+    display: flex; align-items: center; gap: 6px;
+    font-size: 13px; color: var(--text-dim);
+    margin-bottom: 10px;
+  }
+
+  .method-toggle {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin-bottom: 20px;
+  }
+  .method-btn {
+    background: var(--card-inner);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 8px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .method-btn.active {
+    background: var(--accent-dim);
+    border-color: var(--accent);
+  }
+  .method-btn .m-icon { font-size: 20px; margin-bottom: 4px; }
+  .method-btn .m-title { font-size: 14px; font-weight: 600; }
+  .method-btn.active .m-title { color: var(--accent); }
+  .method-btn .m-sub { font-size: 11px; color: var(--text-dim); margin-top: 2px; }
+
+  #qr-panel, #code-panel { text-align: center; }
+  #code-panel { display: none; }
+
+  #qrbox {
+    background: white;
+    padding: 16px;
+    border-radius: 12px;
+    display: inline-block;
+    margin-top: 4px;
+  }
+  #qrimg { width: 220px; height: 220px; display: block; }
+
+  .progress-track {
+    height: 4px;
+    background: var(--border);
+    border-radius: 2px;
+    margin: 16px 0 8px;
+    overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%;
+    background: var(--accent);
+    width: 100%;
+    transition: width 1s linear;
+  }
+  .refresh-note {
+    font-size: 12px; color: var(--text-dim);
+    display: flex; align-items: center; justify-content: center; gap: 6px;
+  }
+  .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
+  .refresh-note b { color: var(--accent); }
+
+  #code-input {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--card-inner);
+    color: var(--text);
+    font-size: 14px;
+    margin-bottom: 12px;
+  }
+  #get-code-btn {
+    width: 100%;
+    padding: 12px;
+    border-radius: 10px;
+    border: none;
+    background: var(--accent);
+    color: #0a0e0d;
+    font-weight: 700;
+    font-size: 14px;
+    cursor: pointer;
+  }
+  #pair-code-display {
+    display: none;
+    font-size: 28px;
+    letter-spacing: 6px;
+    font-weight: 700;
+    background: var(--accent-dim);
+    border: 1px solid var(--accent);
+    color: var(--accent);
+    padding: 16px;
+    border-radius: 12px;
+    margin-top: 12px;
+  }
+
+  #status-text {
+    text-align: center;
+    color: var(--text-dim);
+    font-size: 13px;
+    margin: 4px 0 16px;
+  }
+
+  .steps-card {
+    background: var(--card-inner);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px;
+    margin-top: 20px;
+  }
+  .steps-title { display: flex; align-items: center; gap: 6px; font-weight: 600; margin-bottom: 12px; font-size: 14px; }
+  .step { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 10px; font-size: 13px; color: var(--text-dim); }
+  .step:last-child { margin-bottom: 0; }
+  .step .num {
+    background: var(--accent);
+    color: #0a0e0d;
+    width: 20px; height: 20px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700;
+    flex-shrink: 0;
+  }
+
+  .footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text-dim);
+    margin-top: 20px;
+  }
+  .footer span { color: var(--accent); }
 </style>
 </head>
 <body>
-  <h1>ADEZ MD</h1>
-  <p id="status">Waiting for connection...</p>
+<div class="container">
+  <div class="card">
+    <div class="header">
+      <div class="header-left">
+        <span class="icon">💬</span>
+        <div>
+          <h1>ADEZ <span>MD</span></h1>
+          <p>WhatsApp Link Hub</p>
+        </div>
+      </div>
+    </div>
 
-  <div id="qrbox"><img id="qrimg" src="" alt="QR code"/></div>
-  <div id="codebox"></div>
+    <div class="section-label">⚙️ Connection method</div>
+    <div class="method-toggle">
+      <div class="method-btn active" id="btn-qr" onclick="showPanel('qr')">
+        <div class="m-icon">⬛</div>
+        <div class="m-title">QR Code</div>
+        <div class="m-sub">auto-refresh 30s</div>
+      </div>
+      <div class="method-btn" id="btn-code" onclick="showPanel('code')">
+        <div class="m-icon">🔗</div>
+        <div class="m-title">Pairing Code</div>
+        <div class="m-sub">8-digit code</div>
+      </div>
+    </div>
 
-  <div>
-    <input id="numinput" placeholder="Enter number for pair code (e.g. 2547...)" size="30"/>
-    <button onclick="requestPairCode()">Get Pair Code Instead</button>
+    <p id="status-text">Waiting for connection...</p>
+
+    <div id="qr-panel">
+      <div id="qrbox"><img id="qrimg" src="" alt="QR code"/></div>
+      <div class="progress-track"><div class="progress-fill" id="progress-fill"></div></div>
+      <div class="refresh-note"><span class="dot"></span> QR refreshes in <b id="countdown">30</b> seconds</div>
+    </div>
+
+    <div id="code-panel">
+      <input id="numinput" placeholder="Enter number e.g. 254712345678"/>
+      <button id="get-code-btn" onclick="requestPairCode()">Get Pairing Code</button>
+      <div id="pair-code-display"></div>
+    </div>
+
+    <div class="steps-card">
+      <div class="steps-title">📱 Quick steps</div>
+      <div class="step"><span class="num">1</span> Open WhatsApp → Settings → Linked Devices</div>
+      <div class="step"><span class="num">2</span> Tap "Link a Device" → Scan this QR (or enter the code)</div>
+      <div class="step"><span class="num">3</span> Ready! Session is active & secure</div>
+    </div>
   </div>
+
+  <div class="footer">© 2026 <span>ADEZ MD</span> · WhatsApp Link Hub</div>
+</div>
 
 <script src="/socket.io/socket.io.js"></script>
 <script>
   const socket = io();
+  let countdownTimer;
+
+  function showPanel(which) {
+    document.getElementById('btn-qr').classList.toggle('active', which === 'qr');
+    document.getElementById('btn-code').classList.toggle('active', which === 'code');
+    document.getElementById('qr-panel').style.display = which === 'qr' ? 'block' : 'none';
+    document.getElementById('code-panel').style.display = which === 'code' ? 'block' : 'none';
+  }
+
+  function startCountdown(seconds) {
+    clearInterval(countdownTimer);
+    let remaining = seconds;
+    const fill = document.getElementById('progress-fill');
+    const label = document.getElementById('countdown');
+    fill.style.width = '100%';
+    label.textContent = remaining;
+
+    countdownTimer = setInterval(() => {
+      remaining--;
+      label.textContent = Math.max(remaining, 0);
+      fill.style.width = `${(remaining / seconds) * 100}%`;
+      if (remaining <= 0) clearInterval(countdownTimer);
+    }, 1000);
+  }
 
   socket.on('qr', (qrDataUrl) => {
-    document.getElementById('status').innerText = 'Scan this QR code with WhatsApp';
+    document.getElementById('status-text').innerText = 'Scan this QR code with WhatsApp';
     document.getElementById('qrimg').src = qrDataUrl;
-    document.getElementById('qrbox').style.display = 'block';
-    document.getElementById('codebox').style.display = 'none';
+    startCountdown(30);
   });
 
   socket.on('pairing-code', (code) => {
-    document.getElementById('status').innerText = 'Enter this code in WhatsApp > Linked Devices';
-    document.getElementById('codebox').innerText = code;
-    document.getElementById('codebox').style.display = 'block';
-    document.getElementById('qrbox').style.display = 'none';
+    document.getElementById('status-text').innerText = 'Enter this code in WhatsApp > Linked Devices';
+    const display = document.getElementById('pair-code-display');
+    display.innerText = code;
+    display.style.display = 'block';
   });
 
   socket.on('connected', () => {
-    document.getElementById('status').innerText = '✅ Connected! You can close this page.';
-    document.getElementById('qrbox').style.display = 'none';
-    document.getElementById('codebox').style.display = 'none';
+    document.getElementById('status-text').innerText = '✅ Connected! You can close this page.';
+    clearInterval(countdownTimer);
   });
 
   function requestPairCode() {
@@ -84,4 +301,4 @@
   }
 </script>
 </body>
-</html>
+  </html>
