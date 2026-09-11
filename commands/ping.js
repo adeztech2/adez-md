@@ -1,7 +1,7 @@
-export const name = "ping";
-export const category = "General";
+module.exports.name = "ping";
+module.exports.category = "General";
 
-export async function execute(sock, msg, ctx) {
+module.exports.execute = async function (sock, msg, ctx) {
   const start = Date.now();
 
   const sent = await sock.sendMessage(
@@ -17,4 +17,4 @@ export async function execute(sock, msg, ctx) {
     { text: `🏓 Pong! Response time: ${latency}ms` },
     { quoted: msg, edit: sent.key }
   );
-}
+};
