@@ -279,7 +279,6 @@
       await navigator.clipboard.writeText(text);
       return true;
     } catch (e) {
-      // Fallback for older/unsupported browsers
       const temp = document.createElement('textarea');
       temp.value = text;
       temp.style.position = 'fixed';
@@ -310,6 +309,24 @@
     });
   }
 
+  function requestPairCode() {
+    let num = document.getElementById('numinput').value.trim();
+    num = num.replace(/[^0-9]/g, '');
+
+    if (!num) {
+      return alert('Enter a number first');
+    }
+    if (num.length < 10 || num.length > 15) {
+      return alert('That doesn\'t look like a full number with country code.\nExample: 254712345678 (no +, no leading 0)');
+    }
+    if (num.startsWith('0')) {
+      return alert('Remove the leading 0 after your country code.\nExample: 254712345678, not 2540712345678');
+    }
+
+    document.getElementById('numinput').value = num;
+    socket.emit('request-pair-code', num);
+  }
+
   socket.on('qr', (qrDataUrl) => {
     document.getElementById('status-text').innerText = 'Scan this QR code with WhatsApp';
     document.getElementById('qrimg').src = qrDataUrl;
@@ -323,7 +340,6 @@
     document.getElementById('pair-code-text').innerText = code;
     display.style.display = 'block';
 
-    // Auto-copy to clipboard as soon as the code arrives
     copyToClipboard(code).then((ok) => {
       const hint = document.getElementById('copy-hint');
       hint.textContent = ok ? '✅ Auto-copied to clipboard' : 'Tap to copy';
@@ -331,16 +347,14 @@
     });
   });
 
+  socket.on('pair-error', (message) => {
+    alert(message);
+  });
+
   socket.on('connected', () => {
     document.getElementById('status-text').innerText = '✅ Connected! You can close this page.';
     clearInterval(countdownTimer);
   });
-
-  function requestPairCode() {
-    const num = document.getElementById('numinput').value.trim();
-    if (!num) return alert('Enter a number first');
-    socket.emit('request-pair-code', num);
-  }
 </script>
 </body>
 </html>
