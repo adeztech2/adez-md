@@ -1,3 +1,5 @@
+global.WebSocket = require('ws');
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
@@ -31,7 +33,6 @@ const SUPABASE_WRITE_INTERVAL = 2 * 60 * 1000; // 2 minutes throttle
 
 app.use(express.static('public'));
 
-// Health endpoint for UptimeRobot
 app.get('/', (req, res) => {
   res.json({
     status: 'ok',
@@ -41,7 +42,6 @@ app.get('/', (req, res) => {
   });
 });
 
-// --- Restore session from Supabase before starting ---
 async function restoreSession() {
   console.log('🔄 Checking Supabase for saved session...');
   const { data, error } = await supabase
@@ -69,7 +69,6 @@ async function restoreSession() {
   }
 }
 
-// --- Save session to Supabase (throttled) ---
 async function saveSessionToSupabase() {
   const now = Date.now();
   if (now - lastSupabaseWrite < SUPABASE_WRITE_INTERVAL) return;
@@ -95,7 +94,6 @@ async function saveSessionToSupabase() {
   }
 }
 
-// --- Main bot connection logic ---
 async function startBot() {
   await restoreSession();
 
@@ -144,7 +142,6 @@ async function startBot() {
       const statusCode = lastDisconnect?.error?.output?.statusCode;
       const errorMsg = lastDisconnect?.error?.message || '';
 
-      // Conflict = duplicate session running elsewhere. Kill this one.
       if (errorMsg.includes('conflict') || statusCode === DisconnectReason.multideviceMismatch) {
         console.error('❌ Stream Errored (conflict). Another session is active. Logging out and exiting.');
         try { await sock.logout(); } catch (e) {}
@@ -161,7 +158,6 @@ async function startBot() {
     }
   });
 
-  // Load command router
   const { loadCommands, handleMessage } = require('./lib/router');
   await loadCommands();
 
@@ -174,7 +170,6 @@ async function startBot() {
   });
 }
 
-// --- Socket.IO pairing code support ---
 io.on('connection', (socket) => {
   console.log('🌐 Pair page opened.');
 
