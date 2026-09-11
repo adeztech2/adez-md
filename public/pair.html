@@ -1,0 +1,87 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>ADEZ MD - Pair</title>
+<style>
+  body {
+    background: #111827;
+    color: #f3f4f6;
+    font-family: sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100vh;
+    margin: 0;
+  }
+  h1 { margin-bottom: 4px; }
+  #status { color: #9ca3af; margin-bottom: 16px; }
+  #qrbox { background: white; padding: 16px; border-radius: 8px; }
+  #qrbox img { display: block; width: 260px; height: 260px; }
+  #codebox {
+    margin-top: 16px;
+    font-size: 22px;
+    letter-spacing: 3px;
+    background: #1f2937;
+    padding: 10px 20px;
+    border-radius: 6px;
+    display: none;
+  }
+  input, button {
+    padding: 8px 12px;
+    margin-top: 10px;
+    border-radius: 6px;
+    border: none;
+  }
+  button {
+    background: #22c55e;
+    color: white;
+    cursor: pointer;
+  }
+</style>
+</head>
+<body>
+  <h1>ADEZ MD</h1>
+  <p id="status">Waiting for connection...</p>
+
+  <div id="qrbox"><img id="qrimg" src="" alt="QR code"/></div>
+  <div id="codebox"></div>
+
+  <div>
+    <input id="numinput" placeholder="Enter number for pair code (e.g. 2547...)" size="30"/>
+    <button onclick="requestPairCode()">Get Pair Code Instead</button>
+  </div>
+
+<script src="/socket.io/socket.io.js"></script>
+<script>
+  const socket = io();
+
+  socket.on('qr', (qrDataUrl) => {
+    document.getElementById('status').innerText = 'Scan this QR code with WhatsApp';
+    document.getElementById('qrimg').src = qrDataUrl;
+    document.getElementById('qrbox').style.display = 'block';
+    document.getElementById('codebox').style.display = 'none';
+  });
+
+  socket.on('pairing-code', (code) => {
+    document.getElementById('status').innerText = 'Enter this code in WhatsApp > Linked Devices';
+    document.getElementById('codebox').innerText = code;
+    document.getElementById('codebox').style.display = 'block';
+    document.getElementById('qrbox').style.display = 'none';
+  });
+
+  socket.on('connected', () => {
+    document.getElementById('status').innerText = '✅ Connected! You can close this page.';
+    document.getElementById('qrbox').style.display = 'none';
+    document.getElementById('codebox').style.display = 'none';
+  });
+
+  function requestPairCode() {
+    const num = document.getElementById('numinput').value.trim();
+    if (!num) return alert('Enter a number first');
+    socket.emit('request-pair-code', num);
+  }
+</script>
+</body>
+</html>
