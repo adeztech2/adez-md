@@ -178,7 +178,6 @@ async function startBot() {
 io.on('connection', (socket) => {
   console.log('🌐 Pair page opened.');
 
-  // Immediately send the latest QR/code, if one already exists
   if (lastQR && !isConnected) {
     socket.emit('qr', lastQR);
   }
@@ -188,13 +187,23 @@ io.on('connection', (socket) => {
 
   socket.on('request-pair-code', async (number) => {
     if (!sock) return;
+
+    const cleaned = number.replace(/[^0-9]/g, '');
+
+    if (cleaned.length < 10 || cleaned.length > 15) {
+      console.warn(`⚠️ Rejected pairing code request: invalid number length "${cleaned}"`);
+      socket.emit('pair-error', 'Invalid number format. Include country code, no leading 0.');
+      return;
+    }
+
     try {
-      const code = await sock.requestPairingCode(number.replace(/[^0-9]/g, ''));
+      const code = await sock.requestPairingCode(cleaned);
       lastPairCode = code;
       socket.emit('pairing-code', code);
-      console.log(`🔑 Pairing code generated: ${code}`);
+      console.log(`🔑 Pairing code generated for ${cleaned}: ${code}`);
     } catch (err) {
       console.error('❌ Failed to generate pairing code:', err);
+      socket.emit('pair-error', 'Failed to generate code. Try again or use QR instead.');
     }
   });
 });
