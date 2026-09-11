@@ -48,22 +48,6 @@
   .header-left h1 span { color: var(--accent); }
   .header-left p { font-size: 12px; color: var(--text-dim); margin: 2px 0 0; }
 
-  .toggle-switch {
-    width: 44px; height: 24px;
-    background: var(--card-inner);
-    border-radius: 12px;
-    display: flex;
-    align-items: center;
-    padding: 2px;
-    cursor: pointer;
-  }
-  .toggle-switch .knob {
-    width: 20px; height: 20px;
-    background: var(--text-dim);
-    border-radius: 50%;
-    transition: transform 0.2s;
-  }
-
   .section-label {
     display: flex; align-items: center; gap: 6px;
     font-size: 13px; color: var(--text-dim);
@@ -126,14 +110,14 @@
   .dot { width: 6px; height: 6px; background: var(--accent); border-radius: 50%; }
   .refresh-note b { color: var(--accent); }
 
-  #code-input {
+  #numinput {
     width: 100%;
-    padding: 12px;
+    padding: 16px 14px;
     border-radius: 10px;
     border: 1px solid var(--border);
     background: var(--card-inner);
     color: var(--text);
-    font-size: 14px;
+    font-size: 18px;
     margin-bottom: 12px;
   }
   #get-code-btn {
@@ -158,7 +142,17 @@
     padding: 16px;
     border-radius: 12px;
     margin-top: 12px;
+    cursor: pointer;
+    position: relative;
   }
+  #copy-hint {
+    font-size: 11px;
+    letter-spacing: normal;
+    font-weight: 400;
+    color: var(--text-dim);
+    margin-top: 8px;
+  }
+  #copy-hint.copied { color: var(--accent); }
 
   #status-text {
     text-align: center;
@@ -232,9 +226,12 @@
     </div>
 
     <div id="code-panel">
-      <input id="numinput" placeholder="Enter number e.g. 254712345678"/>
+      <input id="numinput" placeholder="Enter number e.g. 254712345678" inputmode="numeric"/>
       <button id="get-code-btn" onclick="requestPairCode()">Get Pairing Code</button>
-      <div id="pair-code-display"></div>
+      <div id="pair-code-display" onclick="copyCode()">
+        <span id="pair-code-text"></span>
+        <div id="copy-hint">Tap to copy</div>
+      </div>
     </div>
 
     <div class="steps-card">
@@ -252,6 +249,7 @@
 <script>
   const socket = io();
   let countdownTimer;
+  let currentCode = '';
 
   function showPanel(which) {
     document.getElementById('btn-qr').classList.toggle('active', which === 'qr');
@@ -276,6 +274,42 @@
     }, 1000);
   }
 
+  async function copyToClipboard(text) {
+    try {
+      await navigator.clipboard.writeText(text);
+      return true;
+    } catch (e) {
+      // Fallback for older/unsupported browsers
+      const temp = document.createElement('textarea');
+      temp.value = text;
+      temp.style.position = 'fixed';
+      temp.style.opacity = '0';
+      document.body.appendChild(temp);
+      temp.select();
+      try {
+        document.execCommand('copy');
+        document.body.removeChild(temp);
+        return true;
+      } catch (err) {
+        document.body.removeChild(temp);
+        return false;
+      }
+    }
+  }
+
+  function copyCode() {
+    if (!currentCode) return;
+    copyToClipboard(currentCode).then((ok) => {
+      const hint = document.getElementById('copy-hint');
+      hint.textContent = ok ? '✅ Copied!' : 'Tap to copy';
+      hint.classList.toggle('copied', ok);
+      setTimeout(() => {
+        hint.textContent = 'Tap to copy';
+        hint.classList.remove('copied');
+      }, 2000);
+    });
+  }
+
   socket.on('qr', (qrDataUrl) => {
     document.getElementById('status-text').innerText = 'Scan this QR code with WhatsApp';
     document.getElementById('qrimg').src = qrDataUrl;
@@ -284,9 +318,17 @@
 
   socket.on('pairing-code', (code) => {
     document.getElementById('status-text').innerText = 'Enter this code in WhatsApp > Linked Devices';
+    currentCode = code;
     const display = document.getElementById('pair-code-display');
-    display.innerText = code;
+    document.getElementById('pair-code-text').innerText = code;
     display.style.display = 'block';
+
+    // Auto-copy to clipboard as soon as the code arrives
+    copyToClipboard(code).then((ok) => {
+      const hint = document.getElementById('copy-hint');
+      hint.textContent = ok ? '✅ Auto-copied to clipboard' : 'Tap to copy';
+      hint.classList.toggle('copied', ok);
+    });
   });
 
   socket.on('connected', () => {
@@ -301,4 +343,4 @@
   }
 </script>
 </body>
-  </html>
+</html>
