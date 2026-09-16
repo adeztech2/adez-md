@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ADEZ MD Dashboard</title>
+  <style>
+    :root {
+      --bg: #030914;
+      --panel: #09182b;
+      --panel-2: #0d2340;
+      --blue: #39a5ff;
+      --blue-2: #1674d1;
+      --cyan: #5de1ff;
+      --text: #edf7ff;
+      --muted: #91afd0;
+      --border: rgba(94, 169, 239, .25);
+      --good: #48e0a4;
+      --warn: #ffd166;
+      --bad: #ff6b7a;
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      color: var(--text);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: radial-gradient(circle at 15% 0%, #0d3157 0, transparent 34%), linear-gradient(135deg, var(--bg), #06172b);
+    }
+    .shell { width: min(1120px, 100%); margin: auto; padding: 24px 16px 40px; }
+    header { display: flex; justify-content: space-between; align-items: center; gap: 16px; margin-bottom: 22px; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .logo { display: grid; place-items: center; width: 46px; height: 46px; border-radius: 14px; background: linear-gradient(135deg, var(--blue), var(--blue-2)); box-shadow: 0 10px 28px #1674d155; font-size: 23px; }
+    h1, h2, p { margin: 0; }
+    h1 { font-size: clamp(21px, 4vw, 30px); }
+    .subtitle { color: var(--muted); font-size: 13px; margin-top: 3px; }
+    .status-pill { display: flex; align-items: center; gap: 8px; border: 1px solid var(--border); border-radius: 999px; padding: 9px 13px; color: var(--muted); font-size: 13px; background: #071426aa; }
+    .status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--warn); box-shadow: 0 0 12px currentColor; }
+    .status-dot.online { background: var(--good); }
+    .status-dot.offline { background: var(--bad); }
+    .grid { display: grid; grid-template-columns: repeat(12, 1fr); gap: 16px; }
+    .card { grid-column: span 4; padding: 18px; border: 1px solid var(--border); border-radius: 16px; background: linear-gradient(180deg, #0b1d35ee, #071426ee); box-shadow: 0 14px 36px #0005; }
+    .card.wide { grid-column: span 8; }
+    .card.full { grid-column: 1 / -1; }
+    .card h2 { font-size: 15px; margin-bottom: 15px; }
+    .metric { font-size: 24px; font-weight: 800; color: var(--cyan); overflow-wrap: anywhere; }
+    .label { color: var(--muted); font-size: 12px; margin-top: 5px; }
+    .connection-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+    .connection-row + .connection-row { border-top: 1px solid #ffffff12; margin-top: 15px; padding-top: 15px; }
+    .connection-row strong { font-size: 14px; }
+    .connection-row span { color: var(--muted); font-size: 13px; text-align: right; }
+    .actions { display: flex; flex-wrap: wrap; gap: 10px; }
+    button { border: 0; border-radius: 10px; padding: 11px 14px; color: #02111d; background: linear-gradient(135deg, var(--blue), var(--blue-2)); font-weight: 800; cursor: pointer; }
+    button.secondary { color: var(--text); background: var(--panel-2); border: 1px solid var(--border); }
+    button:disabled { opacity: .55; cursor: not-allowed; }
+    input { width: 100%; padding: 12px; color: var(--text); background: #061426; border: 1px solid var(--border); border-radius: 10px; outline: 0; margin-bottom: 10px; }
+    input:focus { border-color: var(--blue); box-shadow: 0 0 0 3px #39a5ff22; }
+    .activity { height: 260px; overflow: auto; padding: 10px; border: 1px solid var(--border); border-radius: 11px; background: #020a14; font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, monospace; }
+    .event { padding: 5px 0; border-bottom: 1px solid #ffffff0b; }
+    .event time { color: #6487ad; margin-right: 8px; }
+    .event.good { color: var(--good); }
+    .event.bad { color: var(--bad); }
+    .event.info { color: var(--text); }
+    .empty { color: var(--muted); }
+    .commands { display: flex; flex-wrap: wrap; gap: 8px; }
+    .command { padding: 7px 10px; color: var(--cyan); background: #0b2a4a; border: 1px solid var(--border); border-radius: 8px; font: 12px ui-monospace, monospace; }
+    .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+    @media (max-width: 760px) { header { align-items: flex-start; flex-direction: column; } .card, .card.wide { grid-column: 1 / -1; } }
+  </style>
+</head>
+<body>
+  <main class="shell">
+    <header>
+      <div class="brand"><div class="logo">⚡</div><div><h1>ADEZ MD Dashboard</h1><p class="subtitle">Live WhatsApp bot monitoring</p></div></div>
+      <div class="status-pill"><span id="status-dot" class="status-dot"></span><span id="status-label">Checking connection…</span></div>
+    </header>
+
+    <section class="grid">
+      <article class="card">
+        <h2>Bot status</h2>
+        <div class="metric" id="bot-name">ADEZ MD</div>
+        <div class="label">Bot name</div>
+        <div class="connection-row" style="margin-top:18px"><strong>Connection</strong><span id="connection-value">Checking…</span></div>
+        <div class="connection-row"><strong>Uptime</strong><span id="uptime-value">—</span></div>
+      </article>
+
+      <article class="card wide">
+        <h2>Pair or connect a number</h2>
+        <input id="number" inputmode="numeric" placeholder="Number with country code, e.g. 254712345678">
+        <div class="actions"><button id="pair-button">Request pairing code</button><button class="secondary" id="refresh-button">Refresh status</button></div>
+        <p class="hint">Use only one dashboard tab and request one pairing code at a time.</p>
+      </article>
+
+      <article class="card full">
+        <h2>Loaded commands</h2>
+        <div id="commands" class="commands"><span class="empty">Commands are loaded when the bot starts.</span></div>
+      </article>
+
+      <article class="card full">
+        <h2>Live activity</h2>
+        <div id="activity" class="activity"><div class="empty">Waiting for bot events…</div></div>
+      </article>
+    </section>
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const $ = (id) => document.getElementById(id);
+    const activity = $('activity');
+
+    function log(message, type = 'info') {
+      const empty = activity.querySelector('.empty');
+      if (empty) empty.remove();
+      const row = document.createElement('div');
+      row.className = `event ${type}`;
+      const time = new Date().toLocaleTimeString();
+      row.innerHTML = `<time>${time}</time>${escapeHtml(message)}`;
+      activity.prepend(row);
+    }
+
+    function escapeHtml(value) {
+      return String(value).replace(/[&<>'"]/g, (char) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[char]));
+    }
+
+    function setStatus(connected) {
+      $('status-dot').className = `status-dot ${connected ? 'online' : 'offline'}`;
+      $('status-label').textContent = connected ? 'Bot online' : 'Bot offline';
+      $('connection-value').textContent = connected ? 'Connected' : 'Disconnected';
+    }
+
+    async function refreshStatus() {
+      try {
+        const response = await fetch('/');
+        const data = await response.json();
+        $('bot-name').textContent = data.bot || 'ADEZ MD';
+        $('uptime-value').textContent = `${Math.floor((data.uptime || 0) / 60)}m`;
+        setStatus(Boolean(data.connected));
+      } catch (error) {
+        setStatus(false);
+        log('Could not read bot status: ' + error.message, 'bad');
+      }
+    }
+
+    $('refresh-button').addEventListener('click', refreshStatus);
+    $('pair-button').addEventListener('click', () => {
+      const number = $('number').value.replace(/[^0-9]/g, '');
+      if (number.length < 10 || number.length > 15 || number.startsWith('0')) {
+        log('Enter a valid number with country code and no leading 0.', 'bad');
+        return;
+      }
+      $('pair-button').disabled = true;
+      socket.emit('request-pair-code', number);
+      log(`Pairing code requested for ${number}.`, 'info');
+      setTimeout(() => $('pair-button').disabled = false, 5000);
+    });
+
+    socket.on('connect', () => { log('Dashboard connected to the bot server.', 'good'); refreshStatus(); });
+    socket.on('disconnect', () => { setStatus(false); log('Dashboard disconnected from the bot server.', 'bad'); });
+    socket.on('qr', () => log('New QR code generated.', 'info'));
+    socket.on('pairing-code', (code) => log(`Pairing code generated: ${code}`, 'good'));
+    socket.on('pair-error', (message) => log('Pairing error: ' + message, 'bad'));
+    socket.on('connected', () => { setStatus(true); log('Bot connected to WhatsApp.', 'good'); refreshStatus(); });
+
+    refreshStatus();
+    setInterval(refreshStatus, 15000);
+  </script>
+</body>
+</html>
