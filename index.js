@@ -48,6 +48,7 @@ const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY
 
 let sock;
 let isConnected = false;
+let isStarting = false;
 let lastQR = null;
 let lastPairCode = null;
 let lastSupabaseWrite = 0;
@@ -146,121 +147,139 @@ async function saveSessionToSupabase() {
 }
 
 async function startBot() {
-  await restoreSession();
+  if (isStarting) return;
+  isStarting = true;
 
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-  const { version } = await fetchLatestBaileysVersion();
+  try {
+    await restoreSession();
 
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    syncFullHistory: false,
-    fireInitQueries: false,
-    browser: Browsers.macOS('Safari'),
-    markOnlineOnConnect: false,
-    retryRequestDelayMs: 500,
-    maxMsgRetryCount: 5
-  });
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
+    const { version } = await fetchLatestBaileysVersion();
 
-  sock.ev.on('creds.update', saveCreds);
+    sock = makeWASocket({
+      version,
+      auth: state,
+      logger: pino({ level: 'silent' }),
+      printQRInTerminal: false,
+      syncFullHistory: false,
+      fireInitQueries: false,
+      browser: Browsers.macOS('Safari'),
+      markOnlineOnConnect: false,
+      retryRequestDelayMs: 500,
+      maxMsgRetryCount: 5
+    });
 
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update;
+    sock.ev.on('creds.update', saveCreds);
 
-    if (qr) {
-      console.log('📱 New QR generated, sending to pair page...');
-      const qrImage = await QRCode.toDataURL(qr);
-      lastQR = qrImage;
-      io.emit('qr', qrImage);
+    sock.ev.on('connection.update', async (update) => {
+      const { connection, lastDisconnect, qr } = update;
 
-      if (pendingPairNumber) {
-        const number = pendingPairNumber;
-        pendingPairNumber = null;
-        try {
-          const code = await sock.requestPairingCode(number);
-          lastPairCode = code;
-          io.emit('pairing-code', code);
-          console.log(`🔑 Pairing code generated for ${number}: ${code}`);
-        } catch (err) {
-          console.error('❌ Failed to generate pairing code after reset:', err);
-          io.emit('pair-error', 'Failed to generate code after reset. Try again.');
-        }
-      }
-    }
+      if (qr) {
+        console.log('📱 New QR generated, sending to pair page...');
+        const qrImage = await QRCode.toDataURL(qr);
+        lastQR = qrImage;
+        io.emit('qr', qrImage);
 
-    if (connection === 'open') {
-      isConnected = true;
-      lastQR = null;
-      lastPairCode = null;
-      console.log('✅ Bot connected to WhatsApp!');
-      io.emit('connected');
-      await saveSessionToSupabase();
-
-      const owner = process.env.OWNER_NUMBER + '@s.whatsapp.net';
-      const caption = `✅ *${process.env.BOT_NAME || 'ADEZ MD'}* is now connected and online!`;
-
-      try {
-        // Use a custom image if BOT_PIC_URL is set, otherwise fall back to
-        // the bot's own WhatsApp profile picture.
-        let picUrl = process.env.BOT_PIC_URL || null;
-
-        if (!picUrl) {
+        if (pendingPairNumber) {
+          const number = pendingPairNumber;
+          pendingPairNumber = null;
           try {
-            const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
-            picUrl = await sock.profilePictureUrl(botJid, 'image');
-          } catch (e) {
-            picUrl = null; // no profile picture set on the account
+            const code = await sock.requestPairingCode(number);
+            lastPairCode = code;
+            io.emit('pairing-code', code);
+            console.log(`🔑 Pairing code generated for ${number}: ${code}`);
+          } catch (err) {
+            console.error('❌ Failed to generate pairing code after reset:', err);
+            io.emit('pair-error', 'Failed to generate code after reset. Try again.');
           }
         }
+      }
 
-        if (picUrl) {
-          await sock.sendMessage(owner, {
-            image: { url: picUrl },
-            caption
-          });
-        } else {
-          await sock.sendMessage(owner, { text: caption });
+      if (connection === 'open') {
+        isConnected = true;
+        isStarting = false;
+        lastQR = null;
+        lastPairCode = null;
+        console.log('✅ Bot connected to WhatsApp!');
+        io.emit('connected');
+        await saveSessionToSupabase();
+
+        const owner = process.env.OWNER_NUMBER + '@s.whatsapp.net';
+        const caption = `✅ *${process.env.BOT_NAME || 'ADEZ MD'}* is now connected and online!`;
+
+        try {
+          let picUrl = process.env.BOT_PIC_URL || null;
+
+          if (!picUrl) {
+            try {
+              const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+              picUrl = await sock.profilePictureUrl(botJid, 'image');
+            } catch (e) {
+              picUrl = null;
+            }
+          }
+
+          if (picUrl) {
+            await sock.sendMessage(owner, {
+              image: { url: picUrl },
+              caption
+            });
+          } else {
+            await sock.sendMessage(owner, { text: caption });
+          }
+        } catch (e) {
+          console.error('Could not send confirmation to owner:', e.message);
         }
-      } catch (e) {
-        console.error('Could not send confirmation to owner:', e.message);
-      }
-    }
-
-    if (connection === 'close') {
-      isConnected = false;
-      const statusCode = lastDisconnect?.error?.output?.statusCode;
-      const errorMsg = lastDisconnect?.error?.message || '';
-
-      if (errorMsg.includes('conflict') || statusCode === DisconnectReason.multideviceMismatch) {
-        console.error('❌ Stream Errored (conflict). Another session is active. Logging out and exiting.');
-        try { await sock.logout(); } catch (e) {}
-        process.exit(1);
       }
 
-      if (statusCode === DisconnectReason.loggedOut) {
-        console.log('🚪 Logged out. Clearing stale session and restarting for a fresh pair...');
-        await clearSession();
-        startBot();
-        return;
+      if (connection === 'close') {
+        isConnected = false;
+        const statusCode = lastDisconnect?.error?.output?.statusCode;
+        const errorMsg = lastDisconnect?.error?.message || '';
+
+        if (errorMsg.includes('conflict') || statusCode === DisconnectReason.multideviceMismatch) {
+          console.error('❌ Stream Errored (conflict). Another session is active. Clearing stale session and restarting.');
+          await clearSession();
+          if (sock && typeof sock.logout === 'function') {
+            try { await sock.logout(); } catch (e) {}
+          }
+          setTimeout(() => {
+            startBot();
+          }, 2000);
+          return;
+        }
+
+        if (statusCode === DisconnectReason.loggedOut) {
+          console.log('🚪 Logged out. Clearing stale session and restarting for a fresh pair...');
+          await clearSession();
+          startBot();
+          return;
+        }
+
+        if (!isConnected) {
+          console.log('🔁 Connection closed, reconnecting...');
+          setTimeout(() => {
+            startBot();
+          }, 1000);
+        }
       }
+    });
 
-      console.log('🔁 Connection closed, reconnecting...');
-      startBot();
-    }
-  });
+    const { loadCommands, handleMessage } = require('./lib/router');
+    await loadCommands();
 
-  const { loadCommands, handleMessage } = require('./lib/router');
-  await loadCommands();
-
-  sock.ev.on('messages.upsert', async (m) => {
-    try {
-      await handleMessage(sock, m);
-    } catch (err) {
-      console.error('❌ Error handling message:', err);
-    }
-  });
+    sock.ev.on('messages.upsert', async (m) => {
+      try {
+        await handleMessage(sock, m);
+      } catch (err) {
+        console.error('❌ Error handling message:', err);
+      }
+    });
+  } catch (err) {
+    console.error('❌ Failed to start bot:', err.message);
+    isStarting = false;
+    setTimeout(() => startBot(), 3000);
+  }
 }
 
 io.on('connection', (socket) => {
@@ -289,13 +308,9 @@ io.on('connection', (socket) => {
     }
 
     try {
-      // Wipe any stale/partial session first so this pairing starts from a clean slate.
       await clearSession();
       pendingPairNumber = cleaned;
 
-      // Restart the socket on fresh credentials. The 'qr' handler in connection.update
-      // will pick up pendingPairNumber and call requestPairingCode once the new
-      // socket is ready.
       if (sock) {
         try {
           sock.end(new Error('resetting for fresh pairing-code request'));
@@ -317,4 +332,3 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   startBot();
 });
-              
