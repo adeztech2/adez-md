@@ -1,5 +1,7 @@
 module.exports.name = "menu";
 module.exports.category = "General";
+module.exports.adminOnly = false;
+module.exports.ownerOnly = false;
 
 module.exports.execute = async function (sock, msg, ctx) {
   const { getAllCommands } = require('../lib/router');
