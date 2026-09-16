@@ -1,5 +1,24 @@
 global.WebSocket = require('ws');
 
+// libsignal (a Baileys dependency) calls console.log() directly to dump full
+// session objects — including raw private key bytes — whenever it closes or
+// rebuilds a session. This happens regardless of the pino logger config below,
+// so it's filtered here, before anything else is required, to stop key
+// material from ever reaching stdout/log storage.
+const _origConsoleLog = console.log;
+console.log = function (...args) {
+  const first = args[0];
+  if (
+    typeof first === 'string' &&
+    (first.startsWith('Closing session:') ||
+      first.startsWith('Closing stale open session') ||
+      first.startsWith('Closing open session'))
+  ) {
+    return; // swallow libsignal's raw session/key dump
+  }
+  _origConsoleLog.apply(console, args);
+};
+
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
