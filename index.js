@@ -237,30 +237,28 @@ async function startBot() {
         const statusCode = lastDisconnect?.error?.output?.statusCode;
         const errorMsg = lastDisconnect?.error?.message || '';
 
+        // This is the real fix for the WhatsApp session conflict loop:
+        // a conflict means another active device/session exists and the app must
+        // stop instead of repeatedly clearing/restoring the same session.
         if (errorMsg.includes('conflict') || statusCode === DisconnectReason.multideviceMismatch) {
-          console.error('❌ Stream Errored (conflict). Another session is active. Clearing stale session and restarting.');
-          await clearSession();
-          if (sock && typeof sock.logout === 'function') {
-            try { await sock.logout(); } catch (e) {}
-          }
-          setTimeout(() => {
-            startBot();
-          }, 2000);
-          return;
+          console.error('❌ WhatsApp session conflict. Another bot session is active. Stop all other instances and re-pair manually.');
+          isStarting = false;
+          try { if (sock && typeof sock.logout === 'function') await sock.logout(); } catch (e) {}
+          process.exit(1);
         }
 
         if (statusCode === DisconnectReason.loggedOut) {
           console.log('🚪 Logged out. Clearing stale session and restarting for a fresh pair...');
+          isStarting = false;
           await clearSession();
-          startBot();
+          setTimeout(() => startBot(), 1500);
           return;
         }
 
         if (!isConnected) {
+          isStarting = false;
           console.log('🔁 Connection closed, reconnecting...');
-          setTimeout(() => {
-            startBot();
-          }, 1000);
+          setTimeout(() => startBot(), 1500);
         }
       }
     });
