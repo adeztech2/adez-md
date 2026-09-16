@@ -13,7 +13,8 @@ const {
   default: makeWASocket,
   useMultiFileAuthState,
   DisconnectReason,
-  fetchLatestBaileysVersion
+  fetchLatestBaileysVersion,
+  Browsers
 } = require('@whiskeysockets/baileys');
 
 require('dotenv').config();
@@ -109,7 +110,7 @@ async function startBot() {
     printQRInTerminal: false,
     syncFullHistory: false,
     fireInitQueries: false,
-    browser: ['ADEZ MD', 'Chrome', '1.0.0']
+    browser: Browsers.macOS('Safari')
   });
 
   sock.ev.on('creds.update', saveCreds);
