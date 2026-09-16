@@ -1,13 +1,13 @@
-export const name = 'ping';
-export const category = 'General';
-export const adminOnly = false;
-export const ownerOnly = false;
+module.exports.name = "ping";
+module.exports.category = "General";
+module.exports.adminOnly = false;
+module.exports.ownerOnly = false;
 
-export async function execute(sock, msg, { from }) {
+module.exports.execute = async function (sock, msg, ctx) {
   const start = Date.now();
 
   const sent = await sock.sendMessage(
-    from,
+    ctx.from,
     { text: '🏓 Pinging...' },
     { quoted: msg }
   );
@@ -15,8 +15,8 @@ export async function execute(sock, msg, { from }) {
   const latency = Date.now() - start;
 
   await sock.sendMessage(
-    from,
+    ctx.from,
     { text: `🏓 Pong!\n⏱️ ${latency}ms` },
     { quoted: sent }
   );
-}
+};
