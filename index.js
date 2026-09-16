@@ -36,6 +36,7 @@ let lastEvent = 'Starting bot';
 let lastNumber = null;
 let lastWrite = 0;
 let pendingPairNumber = null;
+let getCommands = () => [];
 
 function uptimeText() {
   const seconds = Math.floor(process.uptime());
@@ -47,12 +48,13 @@ function statusEvent(event, extra = {}) {
   console.log(event);
 }
 function activity(data) { io.emit('activity', data); }
+function currentSocket(current) { return sock === current && !stoppedForConflict; }
 
 app.use(express.static('public'));
-app.get('/', (_, res) => res.json({ status: 'ok', bot: process.env.BOT_NAME || 'ADEZ MD', connected, number: lastNumber, uptime: process.uptime(), uptimeText: uptimeText(), lastEvent }));
-app.get('/api/status', (_, res) => res.json({ status: 'ok', bot: process.env.BOT_NAME || 'ADEZ MD', connected, number: lastNumber, uptime: process.uptime(), uptimeText: uptimeText(), lastEvent, commands: getCommands() }));
+const status = () => ({ status: 'ok', bot: process.env.BOT_NAME || 'ADEZ MD', connected, number: lastNumber, uptime: process.uptime(), uptimeText: uptimeText(), lastEvent, commands: getCommands() });
+app.get('/', (_, res) => res.json(status()));
+app.get('/api/status', (_, res) => res.json(status()));
 
-let getCommands = () => [];
 async function restoreSession() {
   const { data, error } = await supabase.from('bu_sessions').select('data').eq('id', 'main').single();
   if (error || !data) { statusEvent('No saved session; waiting for pairing'); return; }
@@ -80,7 +82,6 @@ async function saveSession() {
     if (error) console.error('Session save failed:', error.message); else statusEvent('Session synced to Supabase');
   } catch (err) { console.error('Session save failed:', err.message); }
 }
-function currentSocket(s) { return sock === s && !stoppedForConflict; }
 
 async function startBot() {
   if (starting || stoppedForConflict) return;
@@ -92,9 +93,9 @@ async function startBot() {
     const current = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }), printQRInTerminal: false, syncFullHistory: false, fireInitQueries: false, browser: Browsers.macOS('Safari'), markOnlineOnConnect: false, retryRequestDelayMs: 500, maxMsgRetryCount: 5 });
     sock = current;
     current.ev.on('creds.update', saveCreds);
-    const { loadCommands, handleMessage, getAllCommands } = require('./lib/router');
-    getCommands = getAllCommands;
-    await loadCommands();
+    const router = require('./lib/router');
+    getCommands = router.getAllCommands;
+    await router.loadCommands();
     io.emit('commands', getCommands());
     statusEvent(`${getCommands().length} commands loaded`);
 
@@ -133,7 +134,7 @@ async function startBot() {
     });
     current.ev.on('messages.upsert', async update => {
       if (!currentSocket(current)) return;
-      try { await handleMessage(current, update, activity); }
+      try { await router.handleMessage(current, update, activity); }
       catch (err) { activity({ type: 'handler-error', error: err.message }); console.error('Message handler error:', err.message); }
     });
   } catch (err) {
