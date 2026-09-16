@@ -199,10 +199,30 @@ async function startBot() {
       await saveSessionToSupabase();
 
       const owner = process.env.OWNER_NUMBER + '@s.whatsapp.net';
+      const caption = `✅ *${process.env.BOT_NAME || 'ADEZ MD'}* is now connected and online!`;
+
       try {
-        await sock.sendMessage(owner, {
-          text: `✅ *${process.env.BOT_NAME || 'ADEZ MD'}* is now connected and online!`
-        });
+        // Use a custom image if BOT_PIC_URL is set, otherwise fall back to
+        // the bot's own WhatsApp profile picture.
+        let picUrl = process.env.BOT_PIC_URL || null;
+
+        if (!picUrl) {
+          try {
+            const botJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+            picUrl = await sock.profilePictureUrl(botJid, 'image');
+          } catch (e) {
+            picUrl = null; // no profile picture set on the account
+          }
+        }
+
+        if (picUrl) {
+          await sock.sendMessage(owner, {
+            image: { url: picUrl },
+            caption
+          });
+        } else {
+          await sock.sendMessage(owner, { text: caption });
+        }
       } catch (e) {
         console.error('Could not send confirmation to owner:', e.message);
       }
@@ -297,4 +317,4 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   startBot();
 });
-      
+              
