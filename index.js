@@ -139,7 +139,10 @@ async function startBot() {
     printQRInTerminal: false,
     syncFullHistory: false,
     fireInitQueries: false,
-    browser: Browsers.macOS('Safari')
+    browser: Browsers.macOS('Safari'),
+    markOnlineOnConnect: false,
+    retryRequestDelayMs: 500,
+    maxMsgRetryCount: 5
   });
 
   sock.ev.on('creds.update', saveCreds);
@@ -275,4 +278,4 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   startBot();
 });
-          
+      
