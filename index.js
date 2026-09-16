@@ -32,6 +32,7 @@ let isConnected = false;
 let lastQR = null;
 let lastPairCode = null;
 let lastSupabaseWrite = 0;
+let pendingPairNumber = null; // set when a fresh pairing-code request is in flight
 const SUPABASE_WRITE_INTERVAL = 2 * 60 * 1000; // 2 minutes throttle
 
 app.use(express.static('public'));
@@ -70,6 +71,34 @@ async function restoreSession() {
   } catch (err) {
     console.error('❌ Failed to restore session:', err);
   }
+}
+
+async function clearSession() {
+  console.log('🧹 Clearing stale session (local + Supabase)...');
+
+  try {
+    if (fs.existsSync(SESSION_DIR)) {
+      fs.rmSync(SESSION_DIR, { recursive: true, force: true });
+    }
+  } catch (err) {
+    console.error('❌ Failed to clear local session folder:', err);
+  }
+
+  try {
+    const { error } = await supabase
+      .from('bu_sessions')
+      .delete()
+      .eq('id', 'main');
+    if (error) {
+      console.error('❌ Failed to clear Supabase session row:', error.message);
+    }
+  } catch (err) {
+    console.error('❌ Failed to clear Supabase session row:', err);
+  }
+
+  lastSupabaseWrite = 0;
+  lastQR = null;
+  lastPairCode = null;
 }
 
 async function saveSessionToSupabase() {
@@ -123,6 +152,20 @@ async function startBot() {
       const qrImage = await QRCode.toDataURL(qr);
       lastQR = qrImage;
       io.emit('qr', qrImage);
+
+      if (pendingPairNumber) {
+        const number = pendingPairNumber;
+        pendingPairNumber = null;
+        try {
+          const code = await sock.requestPairingCode(number);
+          lastPairCode = code;
+          io.emit('pairing-code', code);
+          console.log(`🔑 Pairing code generated for ${number}: ${code}`);
+        } catch (err) {
+          console.error('❌ Failed to generate pairing code after reset:', err);
+          io.emit('pair-error', 'Failed to generate code after reset. Try again.');
+        }
+      }
     }
 
     if (connection === 'open') {
@@ -155,8 +198,10 @@ async function startBot() {
       }
 
       if (statusCode === DisconnectReason.loggedOut) {
-        console.log('🚪 Logged out. Delete session and rescan.');
-        process.exit(1);
+        console.log('🚪 Logged out. Clearing stale session and restarting for a fresh pair...');
+        await clearSession();
+        startBot();
+        return;
       }
 
       console.log('🔁 Connection closed, reconnecting...');
@@ -188,6 +233,10 @@ io.on('connection', (socket) => {
 
   socket.on('request-pair-code', async (number) => {
     if (!sock) return;
+    if (isConnected) {
+      socket.emit('pair-error', 'Already connected. Log out before pairing again.');
+      return;
+    }
 
     const cleaned = number.replace(/[^0-9]/g, '');
 
@@ -198,13 +247,26 @@ io.on('connection', (socket) => {
     }
 
     try {
-      const code = await sock.requestPairingCode(cleaned);
-      lastPairCode = code;
-      socket.emit('pairing-code', code);
-      console.log(`🔑 Pairing code generated for ${cleaned}: ${code}`);
+      // Wipe any stale/partial session first so this pairing starts from a clean slate.
+      await clearSession();
+      pendingPairNumber = cleaned;
+
+      // Restart the socket on fresh credentials. The 'qr' handler in connection.update
+      // will pick up pendingPairNumber and call requestPairingCode once the new
+      // socket is ready.
+      if (sock) {
+        try {
+          sock.end(new Error('resetting for fresh pairing-code request'));
+        } catch (e) {
+          // ignore - socket may already be closed
+        }
+      } else {
+        startBot();
+      }
     } catch (err) {
-      console.error('❌ Failed to generate pairing code:', err);
-      socket.emit('pair-error', 'Failed to generate code. Try again or use QR instead.');
+      console.error('❌ Failed to reset session for pairing code:', err);
+      pendingPairNumber = null;
+      socket.emit('pair-error', 'Failed to reset session. Try again or use QR instead.');
     }
   });
 });
@@ -213,3 +275,4 @@ server.listen(PORT, () => {
   console.log(`🚀 Server running on port ${PORT}`);
   startBot();
 });
+          
