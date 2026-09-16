@@ -1,20 +1,22 @@
-module.exports.name = "ping";
-module.exports.category = "General";
+export const name = 'ping';
+export const category = 'General';
+export const adminOnly = false;
+export const ownerOnly = false;
 
-module.exports.execute = async function (sock, msg, ctx) {
+export async function execute(sock, msg, { from }) {
   const start = Date.now();
 
   const sent = await sock.sendMessage(
-    ctx.from,
-    { text: "🏓 Pinging..." },
+    from,
+    { text: '🏓 Pinging...' },
     { quoted: msg }
   );
 
   const latency = Date.now() - start;
 
   await sock.sendMessage(
-    ctx.from,
-    { text: `🏓 Pong! Response time: ${latency}ms` },
-    { quoted: msg, edit: sent.key }
+    from,
+    { text: `🏓 Pong!\n⏱️ ${latency}ms` },
+    { quoted: sent }
   );
-};
+}
