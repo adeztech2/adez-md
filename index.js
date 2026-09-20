@@ -1,164 +1,952 @@
-global.WebSocket = require('ws');
-const originalLog = console.log;
-console.log = (...args) => {
-  const text = String(args[0] || '');
-  if (/^Closing (stale |open )?session:/.test(text)) return;
-  originalLog(...args);
-};
+// ============================================================
+// ADEZ MD - WhatsApp Bot
+// Main index.js
+// Baileys 6.7.18
+// Node.js 20.11.1
+// Render + Supabase + QR + Pairing Code
+// ============================================================
+
+require('dotenv').config();
 
 const express = require('express');
 const http = require('http');
 const { Server } = require('socket.io');
-const path = require('path');
-const fs = require('fs');
-const AdmZip = require('adm-zip');
-const QRCode = require('qrcode');
+
+const {
+    default: makeWASocket,
+    useMultiFileAuthState,
+    DisconnectReason,
+    makeCacheableSignalKeyStore,
+    fetchLatestBaileysVersion,
+    Browsers
+} = require('@whiskeysockets/baileys');
+
 const pino = require('pino');
-const { createClient } = require('@supabase/supabase-js');
-const { default: makeWASocket, useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = require('@whiskeysockets/baileys');
-require('dotenv').config();
+const axios = require('axios');
+const AdmZip = require('adm-zip');
+const fs = require('fs-extra');
+const path = require('path');
+
+// ------------------------------------------------------------
+// COMMAND ROUTER
+// ------------------------------------------------------------
+
+const {
+    loadCommands,
+    getAllCommands,
+    processCommand
+} = require('./lib/router');
+
+// ------------------------------------------------------------
+// CONFIGURATION
+// ------------------------------------------------------------
+
+const PORT = Number(process.env.PORT) || 3000;
+
+const BOT_NAME =
+    process.env.BOT_NAME || 'Adez MD';
+
+const OWNER_NUMBER =
+    process.env.OWNER_NUMBER || '254101579396';
+
+const OWNER_NUMBER_2 =
+    process.env.OWNER_NUMBER_2 || '254111783552';
+
+const PREFIX =
+    process.env.PREFIX || '.';
+
+const SUPABASE_URL =
+    process.env.SUPABASE_URL;
+
+const SUPABASE_ANON_KEY =
+    process.env.SUPABASE_ANON_KEY;
+
+const SESSION_NAME =
+    process.env.SESSION_NAME || 'adez-md-session';
+
+const SESSION_WRITE_INTERVAL =
+    Number(process.env.SESSION_WRITE_INTERVAL) || 120000;
+
+const USE_PAIRING_CODE =
+    String(process.env.USE_PAIRING_CODE || 'false').toLowerCase() === 'true';
+
+const PAIRING_NUMBER =
+    process.env.PAIRING_NUMBER || '';
+
+// ------------------------------------------------------------
+// GLOBAL SETTINGS
+// ------------------------------------------------------------
+
+global.channels = [
+    'https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m'
+];
+
+global.targetNumber = '254101579396';
+
+global.autoStatusView = true;
+
+global.commandsLoaded = false;
+
+global.lastSessionSave = 0;
+
+global.whatsappSocket = null;
+
+global.isConnecting = false;
+
+global.reconnectTimer = null;
+
+global.pairingInProgress = false;
+
+// ------------------------------------------------------------
+// SESSION DIRECTORY
+// ------------------------------------------------------------
+
+const SESSION_DIR =
+    path.join(__dirname, 'session');
+
+// Make sure session directory exists
+fs.ensureDirSync(SESSION_DIR);
+
+// ------------------------------------------------------------
+// EXPRESS SERVER
+// ------------------------------------------------------------
 
 const app = express();
-const server = http.createServer(app);
-const io = new Server(server);
-const PORT = process.env.PORT || 3000;
-const SESSION_DIR = path.join(__dirname, 'session');
-const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY);
-const WRITE_INTERVAL = 2 * 60 * 1000;
 
-let sock = null;
-let connected = false;
-let starting = false;
-let stoppedForConflict = false;
-let lastQR = null;
-let lastPairCode = null;
-let lastEvent = 'Starting bot';
-let lastNumber = null;
-let lastWrite = 0;
-let pendingPairNumber = null;
-let getCommands = () => [];
+const server =
+    http.createServer(app);
 
-function uptimeText() {
-  const seconds = Math.floor(process.uptime());
-  return `${Math.floor(seconds / 3600)}h ${Math.floor((seconds % 3600) / 60)}m ${seconds % 60}s`;
-}
-function statusEvent(event, extra = {}) {
-  lastEvent = event;
-  io.emit('bot-status', { connected, number: lastNumber, event, ...extra });
-  console.log(event);
-}
-function activity(data) { io.emit('activity', data); }
-function currentSocket(current) { return sock === current && !stoppedForConflict; }
-
-app.use(express.static('public'));
-const status = () => ({ status: 'ok', bot: process.env.BOT_NAME || 'ADEZ MD', connected, number: lastNumber, uptime: process.uptime(), uptimeText: uptimeText(), lastEvent, commands: getCommands() });
-app.get('/', (_, res) => res.json(status()));
-app.get('/api/status', (_, res) => res.json(status()));
-
-async function restoreSession() {
-  const { data, error } = await supabase.from('bu_sessions').select('data').eq('id', 'main').single();
-  if (error || !data) { statusEvent('No saved session; waiting for pairing'); return; }
-  try {
-    fs.mkdirSync(SESSION_DIR, { recursive: true });
-    const zipPath = path.join(__dirname, 'session_restore.zip');
-    fs.writeFileSync(zipPath, Buffer.from(data.data, 'base64'));
-    new AdmZip(zipPath).extractAllTo(SESSION_DIR, true);
-    fs.unlinkSync(zipPath);
-    statusEvent('Session restored from Supabase');
-  } catch (err) { statusEvent(`Session restore failed: ${err.message}`); }
-}
-async function clearSession() {
-  fs.rmSync(SESSION_DIR, { recursive: true, force: true });
-  const { error } = await supabase.from('bu_sessions').delete().eq('id', 'main');
-  if (error) console.error('Session delete failed:', error.message);
-  lastQR = null; lastPairCode = null; lastWrite = 0;
-}
-async function saveSession() {
-  if (Date.now() - lastWrite < WRITE_INTERVAL) return;
-  lastWrite = Date.now();
-  try {
-    const zip = new AdmZip(); zip.addLocalFolder(SESSION_DIR);
-    const { error } = await supabase.from('bu_sessions').upsert({ id: 'main', data: zip.toBuffer().toString('base64') });
-    if (error) console.error('Session save failed:', error.message); else statusEvent('Session synced to Supabase');
-  } catch (err) { console.error('Session save failed:', err.message); }
-}
-
-async function startBot() {
-  if (starting || stoppedForConflict) return;
-  starting = true;
-  try {
-    await restoreSession();
-    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
-    const { version } = await fetchLatestBaileysVersion();
-    const current = makeWASocket({ version, auth: state, logger: pino({ level: 'silent' }), printQRInTerminal: false, syncFullHistory: false, fireInitQueries: false, browser: Browsers.macOS('Safari'), markOnlineOnConnect: false, retryRequestDelayMs: 500, maxMsgRetryCount: 5 });
-    sock = current;
-    current.ev.on('creds.update', saveCreds);
-    const router = require('./lib/router');
-    getCommands = router.getAllCommands;
-    await router.loadCommands();
-    io.emit('commands', getCommands());
-    statusEvent(`${getCommands().length} commands loaded`);
-
-    current.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-      if (!currentSocket(current)) return;
-      if (qr) {
-        lastQR = await QRCode.toDataURL(qr);
-        io.emit('qr', lastQR);
-        statusEvent('QR code generated');
-        if (pendingPairNumber) {
-          const number = pendingPairNumber; pendingPairNumber = null;
-          try { lastPairCode = await current.requestPairingCode(number); io.emit('pairing-code', lastPairCode); statusEvent('Pairing code generated'); }
-          catch (err) { io.emit('pair-error', err.message); statusEvent(`Pairing code failed: ${err.message}`); }
+const io =
+    new Server(server, {
+        cors: {
+            origin: '*'
         }
-      }
-      if (connection === 'open') {
-        connected = true; starting = false; lastQR = null; lastPairCode = null;
-        lastNumber = current.user?.id?.split(':')[0] || null;
-        statusEvent('Bot connected to WhatsApp'); io.emit('connected'); await saveSession();
-      }
-      if (connection === 'close') {
-        connected = false;
-        const code = lastDisconnect?.error?.output?.statusCode;
-        const message = lastDisconnect?.error?.message || '';
-        if (message.toLowerCase().includes('conflict') || code === DisconnectReason.multideviceMismatch) {
-          stoppedForConflict = true; starting = false;
-          statusEvent('SESSION CONFLICT: log out other linked devices, then restart');
-          try { current.end(new Error('session conflict')); } catch (_) {}
-          process.exitCode = 1; process.exit(1); return;
-        }
-        if (code === DisconnectReason.loggedOut) {
-          starting = false; statusEvent('Logged out; clearing session'); await clearSession(); setTimeout(startBot, 1500); return;
-        }
-        starting = false; statusEvent('Connection closed; reconnecting'); setTimeout(startBot, 1500);
-      }
     });
-    current.ev.on('messages.upsert', async update => {
-      if (!currentSocket(current)) return;
-      try { await router.handleMessage(current, update, activity); }
-      catch (err) { activity({ type: 'handler-error', error: err.message }); console.error('Message handler error:', err.message); }
-    });
-  } catch (err) {
-    starting = false; statusEvent(`Startup failed: ${err.message}`); if (!stoppedForConflict) setTimeout(startBot, 3000);
-  }
-}
 
-io.on('connection', socket => {
-  socket.emit('bot-status', { connected, number: lastNumber, event: lastEvent });
-  socket.emit('commands', getCommands());
-  if (lastQR && !connected) socket.emit('qr', lastQR);
-  if (lastPairCode && !connected) socket.emit('pairing-code', lastPairCode);
-  socket.on('request-pair-code', async value => {
-    if (connected) return socket.emit('pair-error', 'Bot is already connected.');
-    if (pendingPairNumber) return socket.emit('pair-error', 'A pairing request is already in progress.');
-    const number = String(value || '').replace(/[^0-9]/g, '');
-    if (number.length < 10 || number.length > 15 || number.startsWith('0')) return socket.emit('pair-error', 'Use a valid country-code number without a leading 0.');
-    pendingPairNumber = number;
-    try {
-      const old = sock; sock = null; connected = false;
-      if (old) old.end(new Error('pairing reset'));
-      await clearSession(); starting = false; statusEvent('Pairing reset requested'); setTimeout(startBot, 500);
-    } catch (err) { pendingPairNumber = null; socket.emit('pair-error', err.message); }
-  });
+// ------------------------------------------------------------
+// MIDDLEWARE
+// ------------------------------------------------------------
+
+app.use(express.json());
+
+app.use(express.urlencoded({
+    extended: true
+}));
+
+app.use(express.static(
+    path.join(__dirname, 'public')
+));
+
+// ------------------------------------------------------------
+// HEALTH CHECK
+// ------------------------------------------------------------
+
+app.get('/', (req, res) => {
+
+    res.json({
+        status: 'online',
+        bot: BOT_NAME,
+        whatsapp:
+            global.whatsappSocket
+                ? 'running'
+                : 'offline',
+        uptime: process.uptime(),
+        timestamp:
+            new Date().toISOString()
+    });
+
 });
 
-server.listen(PORT, () => { console.log(`🚀 Server running on port ${PORT}`); startBot(); });
+// ------------------------------------------------------------
+// STATUS API
+// ------------------------------------------------------------
+
+app.get('/api/status', (req, res) => {
+
+    res.json({
+        status: 'online',
+        bot: BOT_NAME,
+        connected:
+            !!global.whatsappSocket,
+        uptime: process.uptime(),
+        timestamp:
+            new Date().toISOString()
+    });
+
+});
+
+// ------------------------------------------------------------
+// PAIRING CODE API
+// ------------------------------------------------------------
+
+app.get('/api/pair', async (req, res) => {
+
+    try {
+
+        const number =
+            cleanPhoneNumber(
+                req.query.number || PAIRING_NUMBER
+            );
+
+        if (!validPhoneNumber(number)) {
+
+            return res.status(400).json({
+                error: 'A valid phone number is required, e.g. /api/pair?number=254700000000'
+            });
+
+        }
+
+        if (global.whatsappSocket && global.whatsappSocket.authState?.creds?.registered) {
+
+            return res.status(400).json({
+                error: 'Already connected to WhatsApp.'
+            });
+
+        }
+
+        if (global.pairingInProgress) {
+
+            return res.status(429).json({
+                error: 'A pairing request is already in progress.'
+            });
+
+        }
+
+        global.pairingInProgress = true;
+
+        const sock =
+            await startWhatsApp({ forcePairing: true });
+
+        if (!sock) {
+
+            global.pairingInProgress = false;
+
+            return res.status(500).json({
+                error: 'Failed to initialize WhatsApp socket.'
+            });
+
+        }
+
+        const code =
+            await sock.requestPairingCode(number);
+
+        global.pairingInProgress = false;
+
+        res.json({
+            pairingCode: code,
+            number
+        });
+
+    } catch (error) {
+
+        global.pairingInProgress = false;
+
+        console.error(
+            '❌ Pairing code request failed:',
+            error.message
+        );
+
+        res.status(500).json({
+            error: error.message
+        });
+
+    }
+
+});
+
+// ------------------------------------------------------------
+// SESSION RESET API
+// ------------------------------------------------------------
+
+app.post('/api/reset-session', async (req, res) => {
+
+    try {
+
+        await deleteSession();
+
+        if (global.whatsappSocket) {
+
+            try {
+                global.whatsappSocket.end(undefined);
+            } catch (_) {}
+
+            global.whatsappSocket = null;
+
+        }
+
+        res.json({ success: true });
+
+    } catch (error) {
+
+        res.status(500).json({
+            error: error.message
+        });
+
+    }
+
+});
+
+// ------------------------------------------------------------
+// SOCKET.IO
+// ------------------------------------------------------------
+
+io.on('connection', (socket) => {
+
+    console.log(
+        '🔗 Dashboard client connected'
+    );
+
+    socket.emit(
+        'status',
+        {
+            connected: !!global.whatsappSocket
+        }
+    );
+
+    socket.on('disconnect', () => {
+
+        console.log(
+            '🔌 Dashboard client disconnected'
+        );
+
+    });
+
+});
+
+// ------------------------------------------------------------
+// SUPABASE VALIDATION
+// ------------------------------------------------------------
+
+if (!SUPABASE_URL) {
+
+    console.warn(
+        '⚠️ SUPABASE_URL is not configured.'
+    );
+
+}
+
+if (!SUPABASE_ANON_KEY) {
+
+    console.warn(
+        '⚠️ SUPABASE_ANON_KEY is not configured.'
+    );
+
+}
+
+// ------------------------------------------------------------
+// SUPABASE REQUEST
+// ------------------------------------------------------------
+
+async function supabaseRequest(
+    endpoint,
+    options = {}
+) {
+
+    if (!SUPABASE_URL ||
+        !SUPABASE_ANON_KEY) {
+
+        throw new Error(
+            'Supabase environment variables are missing.'
+        );
+    }
+
+    const url =
+        `${SUPABASE_URL}/rest/v1/${endpoint}`;
+
+    const headers = {
+
+        apikey:
+            SUPABASE_ANON_KEY,
+
+        Authorization:
+            `Bearer ${SUPABASE_ANON_KEY}`,
+
+        'Content-Type':
+            'application/json',
+
+        ...options.headers
+    };
+
+    return await axios({
+
+        url,
+
+        method:
+            options.method || 'GET',
+
+        headers,
+
+        data:
+            options.data,
+
+        timeout: 30000
+
+    });
+
+}
+
+// ------------------------------------------------------------
+// SAVE SESSION TO SUPABASE
+// ------------------------------------------------------------
+
+async function saveSessionToSupabase() {
+
+    try {
+
+        if (!fs.existsSync(SESSION_DIR)) {
+            return;
+        }
+
+        const files =
+            await fs.readdir(SESSION_DIR);
+
+        if (!files.length) {
+            return;
+        }
+
+        console.log(
+            '📦 Saving session to Supabase...'
+        );
+
+        const zip =
+            new AdmZip();
+
+        for (const file of files) {
+
+            const filePath =
+                path.join(
+                    SESSION_DIR,
+                    file
+                );
+
+            const stat =
+                await fs.stat(filePath);
+
+            if (stat.isFile()) {
+
+                zip.addLocalFile(
+                    filePath,
+                    '',
+                    file
+                );
+
+            }
+
+        }
+
+        const buffer =
+            zip.toBuffer();
+
+        const base64 =
+            buffer.toString('base64');
+
+        await supabaseRequest(
+            'bu_sessions',
+            {
+                method: 'POST',
+
+                headers: {
+                    Prefer:
+                        'resolution=merge-duplicates'
+                },
+
+                data: {
+                    id: SESSION_NAME,
+                    data: base64
+                }
+            }
+        );
+
+        global.lastSessionSave =
+            Date.now();
+
+        console.log(
+            '✅ Session saved to Supabase'
+        );
+
+    } catch (error) {
+
+        console.error(
+            '❌ Supabase session save failed:',
+            error.response?.data ||
+            error.message
+        );
+
+    }
+
+}
+
+// ------------------------------------------------------------
+// LOAD SESSION FROM SUPABASE
+// ------------------------------------------------------------
+
+async function loadSessionFromSupabase() {
+
+    try {
+
+        console.log(
+            '📥 Loading session from Supabase...'
+        );
+
+        const response =
+            await supabaseRequest(
+                `bu_sessions?id=eq.${encodeURIComponent(
+                    SESSION_NAME
+                )}`
+            );
+
+        if (
+            response.data &&
+            response.data.length > 0
+        ) {
+
+            const base64 =
+                response.data[0].data;
+
+            if (!base64) {
+
+                console.log(
+                    '⚠️ Session exists but contains no data.'
+                );
+
+                return false;
+            }
+
+            const zipBuffer =
+                Buffer.from(
+                    base64,
+                    'base64'
+                );
+
+            const zip =
+                new AdmZip(zipBuffer);
+
+            fs.ensureDirSync(
+                SESSION_DIR
+            );
+
+            zip.extractAllTo(
+                SESSION_DIR,
+                true
+            );
+
+            console.log(
+                '✅ Session loaded from Supabase'
+            );
+
+            return true;
+
+        }
+
+        console.log(
+            '📝 No existing session found. QR or pairing code required.'
+        );
+
+        return false;
+
+    } catch (error) {
+
+        console.error(
+            '❌ Failed to load session:',
+            error.response?.data ||
+            error.message
+        );
+
+        return false;
+
+    }
+
+}
+
+// ------------------------------------------------------------
+// DELETE SESSION
+// ------------------------------------------------------------
+
+async function deleteSession() {
+
+    try {
+
+        console.log(
+            '🗑️ Clearing WhatsApp session...'
+        );
+
+        await fs.emptyDir(
+            SESSION_DIR
+        );
+
+        if (
+            SUPABASE_URL &&
+            SUPABASE_ANON_KEY
+        ) {
+
+            await supabaseRequest(
+                `bu_sessions?id=eq.${encodeURIComponent(
+                    SESSION_NAME
+                )}`,
+                {
+                    method: 'DELETE'
+                }
+            );
+
+        }
+
+        console.log(
+            '✅ Session cleared'
+        );
+
+    } catch (error) {
+
+        console.error(
+            '❌ Failed to clear session:',
+            error.message
+        );
+
+    }
+
+}
+
+// ------------------------------------------------------------
+// LOAD COMMANDS
+// ------------------------------------------------------------
+
+async function initializeCommands() {
+
+    try {
+
+        if (!global.commandsLoaded) {
+
+            console.log(
+                '📚 Loading commands...'
+            );
+
+            await loadCommands();
+
+            global.commandsLoaded =
+                true;
+
+        }
+
+        console.log(
+            `📚 Loaded ${getAllCommands().length} commands`
+        );
+
+    } catch (error) {
+
+        console.error(
+            '❌ Command loading failed:',
+            error
+        );
+
+    }
+
+}
+
+// ------------------------------------------------------------
+// NORMALIZE PHONE NUMBER
+// ------------------------------------------------------------
+
+function cleanPhoneNumber(number) {
+
+    return String(number || '')
+        .replace(/[^0-9]/g, '');
+
+}
+
+// ------------------------------------------------------------
+// VALIDATE PHONE NUMBER
+// ------------------------------------------------------------
+
+function validPhoneNumber(number) {
+
+    return (
+        number.length >= 10 &&
+        number.length <= 15
+    );
+
+}
+
+// ------------------------------------------------------------
+// RECONNECT
+// ------------------------------------------------------------
+
+function scheduleReconnect(delay = 10000) {
+
+    if (global.reconnectTimer) {
+
+        clearTimeout(
+            global.reconnectTimer
+        );
+
+    }
+
+    console.log(
+        `🔄 Reconnecting in ${Math.round(
+            delay / 1000
+        )} seconds...`
+    );
+
+    global.reconnectTimer =
+        setTimeout(() => {
+
+            global.reconnectTimer =
+                null;
+
+            startWhatsApp();
+
+        }, delay);
+
+}
+
+// ------------------------------------------------------------
+// START WHATSAPP
+// ------------------------------------------------------------
+
+async function startWhatsApp(opts = {}) {
+
+    // Prevent duplicate sockets
+    if (global.isConnecting) {
+
+        console.log(
+            '⚠️ WhatsApp connection already in progress.'
+        );
+
+        return global.whatsappSocket;
+
+    }
+
+    global.isConnecting = true;
+
+    try {
+
+        console.log(
+            '🤖 Starting Adez MD Bot...'
+        );
+
+        // ----------------------------------------------------
+        // LOAD SUPABASE SESSION
+        // ----------------------------------------------------
+
+        if (!opts.forcePairing) {
+
+            await loadSessionFromSupabase();
+
+        }
+
+        fs.ensureDirSync(
+            SESSION_DIR
+        );
+
+        // ----------------------------------------------------
+        // AUTH STATE
+        // ----------------------------------------------------
+
+        const {
+            state,
+            saveCreds
+        } =
+            await useMultiFileAuthState(
+                SESSION_DIR
+            );
+
+        // ----------------------------------------------------
+        // GET CURRENT WHATSAPP WEB VERSION
+        // ----------------------------------------------------
+
+        let version;
+
+        try {
+
+            const latest =
+                await fetchLatestBaileysVersion();
+
+            version =
+                latest.version;
+
+            console.log(
+                `📱 WhatsApp Web version: ${version.join('.')}`
+            );
+
+            if (!latest.isLatest) {
+
+                console.warn(
+                    '⚠️ Baileys bundled version is not the latest WhatsApp Web version.'
+                );
+
+            }
+
+        } catch (error) {
+
+            console.warn(
+                '⚠️ Could not fetch latest WhatsApp Web version.'
+            );
+
+            console.warn(
+                error.message
+            );
+
+            // Let Baileys use its normal default
+            version = undefined;
+
+        }
+
+        // ----------------------------------------------------
+        // CREATE SOCKET
+        // ----------------------------------------------------
+
+        const socketOptions = {
+
+            auth: {
+
+                creds:
+                    state.creds,
+
+                keys:
+                    makeCacheableSignalKeyStore(
+                        state.keys,
+                        pino({
+                            level: 'silent'
+                        })
+                    )
+
+            },
+
+            logger:
+                pino({
+                    level: 'silent'
+                }),
+
+            printQRInTerminal:
+                false,
+
+            browser:
+                Browsers.ubuntu(
+                    'Chrome'
+                ),
+
+            syncFullHistory:
+                false,
+
+            markOnlineOnConnect:
+                false,
+
+            generateHighQualityLinkPreview:
+                true,
+
+            fireInitQueries:
+                true
+
+        };
+
+        if (version) {
+
+            socketOptions.version =
+                version;
+
+        }
+
+        const sock =
+            makeWASocket(
+                socketOptions
+            );
+
+        global.whatsappSocket =
+            sock;
+
+        // ----------------------------------------------------
+        // SAVE CREDENTIALS
+        // ----------------------------------------------------
+
+        sock.ev.on(
+            'creds.update',
+            async () => {
+
+                try {
+
+                    await saveCreds();
+
+                    const now =
+                        Date.now();
+
+                    if (
+                        now -
+                        global.lastSessionSave
+                        >
+                        SESSION_WRITE_INTERVAL
+                    ) {
+
+                        await saveSessionToSupabase();
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '❌ Credential save error:',
+                        error.message
+                    );
+
+                }
+
+            }
+        );
+
+        // ----------------------------------------------------
+        // INCOMING MESSAGES
+        // ----------------------------------------------------
+
+        sock.ev.on(
+            'messages.upsert',
+            async ({ messages, type }) => {
+
+                try {
+
+                    if (type !== 'notify') {
+                        return;
+                    }
+
+                    if (!global.commandsLoaded) {
+                        await initializeCommands();
+                    }
+
+                    for (const msg of messages) {
+
+                        if (!msg.message) continue;
+                        if (msg.key?.fromMe) continue;
+
+                        await processCommand(
+                            sock,
+                            msg,
+                            {
+                                prefix: PREFIX,
+                                botName: BOT_NAME,
+                                ownerNumbers: [
+                                    OWNER_NUMBER,
+                                    OWNER_NUMBER_2
+                                ]
+                            }
+                        );
+
+                    }
+
+                } catch (error) {
+
+                    console.error(
+                        '❌ Message handling error:',
+                        error
+                    );
+
+                }
+
+            }
+        );
+
+        // ----------------------------------------------------
+        // CONNECTION UPDATE
+        // ----------------------------------------------------
+
+        sock.ev.on(
+            'connection.update',
+            async (update) => {
+
+                const {
+                    
