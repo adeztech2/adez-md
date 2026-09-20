@@ -1,31 +1,31 @@
-module.exports.name = "menu";
-module.exports.category = "General";
-module.exports.adminOnly = false;
-module.exports.ownerOnly = false;
+module.exports = {
+    name: 'menu',
+    aliases: ['help', 'commands'],
+    description: 'List all available commands',
+    ownerOnly: false,
 
-module.exports.execute = async function (sock, msg, ctx) {
-  const { getAllCommands } = require('../lib/router');
-  const commands = getAllCommands();
-  const prefix = process.env.PREFIX || '.';
-  const botName = process.env.BOT_NAME || 'ADEZ MD';
+    async execute(sock, msg, ctx) {
 
-  const grouped = {};
-  for (const cmd of commands) {
-    if (!grouped[cmd.category]) grouped[cmd.category] = [];
-    grouped[cmd.category].push(cmd.name);
-  }
+        // Lazy require to avoid a circular dependency with router.js
+        const { getAllCommands } = require('../router');
 
-  let menuText = `╭─❒ *${botName}* ❒\n│\n`;
-  menuText += `│ Total Commands: ${commands.length}\n`;
-  menuText += `│ Prefix: ${prefix}\n╰────────────────\n\n`;
+        const commands = getAllCommands()
+            .sort((a, b) => a.name.localeCompare(b.name));
 
-  for (const category of Object.keys(grouped).sort()) {
-    menuText += `╭─❒ *${category}* ❒\n`;
-    for (const name of grouped[category]) {
-      menuText += `│ ⊳ ${prefix}${name}\n`;
+        const lines = commands.map(
+            (cmd) => `▸ *${ctx.prefix}${cmd.name}* — ${cmd.description || 'No description'}`
+        );
+
+        await sock.sendMessage(
+            ctx.from,
+            {
+                text:
+                    `📋 *${ctx.botName} — Command Menu*\n\n` +
+                    lines.join('\n') +
+                    `\n\nTotal: ${commands.length} commands`
+            },
+            { quoted: msg }
+        );
+
     }
-    menuText += `╰────────────────\n\n`;
-  }
-
-  await sock.sendMessage(ctx.from, { text: menuText.trim() }, { quoted: msg });
 };
