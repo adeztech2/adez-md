@@ -20,6 +20,7 @@ const PREFIX = ".";
 const PORT = process.env.PORT || 3000;
 
 let latestQR = null; // holds the current QR string so the web page can render it
+let sock = null; // holds the active socket so routes below can use it
 
 // --- Web server: shows a scannable QR page at your Render URL ---
 const app = express();
@@ -42,6 +43,32 @@ app.get("/qr", async (req, res) => {
   }
 });
 
+// Request a pairing code for a given phone number (digits only, country code first, no +)
+app.get("/request-code", async (req, res) => {
+  const number = (req.query.number || "").replace(/[^0-9]/g, "");
+
+  if (!number) {
+    res.status(400).json({ error: "Provide a phone number, e.g. ?number=254111783552" });
+    return;
+  }
+  if (!sock) {
+    res.status(503).json({ error: "Bot is still starting up. Try again in a few seconds." });
+    return;
+  }
+  if (sock.authState?.creds?.registered) {
+    res.status(400).json({ error: "Already connected. No pairing needed." });
+    return;
+  }
+
+  try {
+    const code = await sock.requestPairingCode(number);
+    res.json({ code });
+  } catch (err) {
+    console.error("Pairing code error:", err);
+    res.status(500).json({ error: "Failed to generate pairing code. Check the number and try again." });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Pairing page running on port ${PORT}`);
 });
@@ -54,7 +81,7 @@ async function startBot() {
 
   const { version } = await fetchLatestBaileysVersion();
 
-  const sock = makeWASocket({
+  sock = makeWASocket({
     version,
     auth: state,
     logger: pino({ level: "silent" }), // set to "info" if you want to see raw logs
@@ -102,7 +129,7 @@ async function startBot() {
     if (type !== "notify") return;
 
     const msg = messages[0];
-    if (!msg.message || msg.key.fromMe) return;
+    if (!msg.message) return;
 
     try {
       await handleMessage(sock, msg, { PREFIX, OWNER_NUMBER, BOT_NAME });
