@@ -4,7 +4,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>ADEZ MD - Pair Device</title>
-  <meta http-equiv="refresh" content="5" />
   <style>
     body {
       background: #0f172a;
@@ -35,6 +34,46 @@
       font-size: 14px;
       color: #64748b;
     }
+    .divider {
+      margin: 24px 0 12px;
+      color: #475569;
+      font-size: 13px;
+    }
+    .code-box {
+      background: #1e293b;
+      padding: 16px 20px;
+      border-radius: 10px;
+      width: 100%;
+      max-width: 280px;
+      box-sizing: border-box;
+    }
+    .code-box p { margin: 0 0 10px; color: #cbd5e1; font-size: 14px; }
+    .code-box input {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: 1px solid #334155;
+      background: #0f172a;
+      color: #f1f5f9;
+      box-sizing: border-box;
+      margin-bottom: 10px;
+      font-size: 14px;
+    }
+    .code-box button {
+      width: 100%;
+      padding: 8px 10px;
+      border-radius: 6px;
+      border: none;
+      background: #22c55e;
+      color: #052e16;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    #codeResult {
+      margin-top: 12px;
+      font-size: 18px;
+      letter-spacing: 1px;
+    }
   </style>
 </head>
 <body>
@@ -44,6 +83,41 @@
   <div id="fallback" style="display:none; color:#f87171;">
     No QR available right now. If the bot is already connected, you don't need this page.
   </div>
+
+  <div class="divider">— or —</div>
+
+  <div class="code-box">
+    <p>Get a pairing code instead</p>
+    <input id="numberInput" type="text" placeholder="e.g. 254111783552" />
+    <button onclick="requestCode()">Get Code</button>
+    <div id="codeResult"></div>
+  </div>
+
   <div class="status">This page refreshes every 5 seconds automatically.</div>
+
+  <script>
+    async function requestCode() {
+      const number = document.getElementById('numberInput').value.trim();
+      const resultEl = document.getElementById('codeResult');
+      resultEl.textContent = 'Requesting...';
+      try {
+        const res = await fetch('/request-code?number=' + encodeURIComponent(number));
+        const data = await res.json();
+        if (data.code) {
+          resultEl.innerHTML = 'Your code: <strong>' + data.code + '</strong>';
+        } else {
+          resultEl.textContent = data.error || 'Something went wrong.';
+        }
+      } catch (err) {
+        resultEl.textContent = 'Request failed. Try again.';
+      }
+    }
+
+    // Refresh just the QR image every 5s, without touching the code form
+    setInterval(() => {
+      const img = document.querySelector('img[alt="QR Code"]');
+      if (img) img.src = '/qr?t=' + Date.now();
+    }, 5000);
+  </script>
 </body>
 </html>
