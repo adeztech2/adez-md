@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 
 let latestQR = null; // holds the current QR string so the web page can render it
 let sock = null; // holds the active socket so routes below can use it
+let hasAlertedOwner = false; // ensures the link-success alert only fires once per run
 
 // --- Web server: shows a scannable QR page at your Render URL ---
 const app = express();
@@ -121,6 +122,21 @@ async function startBot() {
     } else if (connection === "open") {
       latestQR = null;
       console.log(`${BOT_NAME} is connected and online! ✅`);
+
+      // Send a one-time alert to the owner confirming the link worked
+      if (!hasAlertedOwner) {
+        hasAlertedOwner = true;
+        const ownerJid = `${OWNER_NUMBER}@s.whatsapp.net`;
+        sock
+          .sendMessage(ownerJid, {
+            text:
+              `✅ *${BOT_NAME}* linked successfully!\n\n` +
+              `Your bot is now online and ready to use.\n` +
+              `Prefix: ${PREFIX}\n\n` +
+              `Send *${PREFIX}menu* to see all commands.`,
+          })
+          .catch((err) => console.error("Failed to send link alert:", err));
+      }
     }
   });
 
