@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ADEZ MD - Pair Device</title>
+  <meta http-equiv="refresh" content="5" />
+  <style>
+    body {
+      background: #0f172a;
+      color: #f1f5f9;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      margin: 0;
+      text-align: center;
+      padding: 20px;
+      box-sizing: border-box;
+    }
+    h1 { margin-bottom: 4px; }
+    p { color: #94a3b8; margin-top: 0; }
+    img {
+      width: 280px;
+      height: 280px;
+      background: white;
+      padding: 12px;
+      border-radius: 12px;
+      margin-top: 20px;
+    }
+    .status {
+      margin-top: 20px;
+      font-size: 14px;
+      color: #64748b;
+    }
+  </style>
+</head>
+<body>
+  <h1>ADEZ MD</h1>
+  <p>Scan this with WhatsApp → Linked Devices</p>
+  <img src="/qr" alt="QR Code" onerror="this.style.display='none'; document.getElementById('fallback').style.display='block';" />
+  <div id="fallback" style="display:none; color:#f87171;">
+    No QR available right now. If the bot is already connected, you don't need this page.
+  </div>
+  <div class="status">This page refreshes every 5 seconds automatically.</div>
+</body>
+</html>
