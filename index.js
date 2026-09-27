@@ -6,7 +6,9 @@ const {
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const pino = require("pino");
-const qrcode = require("qrcode-terminal");
+const qrcodeTerminal = require("qrcode-terminal");
+const qrcode = require("qrcode");
+const express = require("express");
 const path = require("path");
 
 const { handleMessage } = require("./lib/router");
@@ -15,6 +17,34 @@ const { handleMessage } = require("./lib/router");
 const OWNER_NUMBER = "254111783552";
 const BOT_NAME = "ADEZ MD";
 const PREFIX = ".";
+const PORT = process.env.PORT || 3000;
+
+let latestQR = null; // holds the current QR string so the web page can render it
+
+// --- Web server: shows a scannable QR page at your Render URL ---
+const app = express();
+app.use(express.static(path.join(__dirname, "public")));
+
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "pair.html"));
+});
+
+app.get("/qr", async (req, res) => {
+  if (!latestQR) {
+    res.status(404).send("No QR available");
+    return;
+  }
+  try {
+    const buffer = await qrcode.toBuffer(latestQR, { width: 280 });
+    res.type("png").send(buffer);
+  } catch (err) {
+    res.status(500).send("Failed to generate QR");
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Pairing page running on port ${PORT}`);
+});
 
 async function startBot() {
   // Where the login session is saved, so you don't have to scan the QR every restart
@@ -39,8 +69,10 @@ async function startBot() {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      console.log("\nScan this QR code with WhatsApp (Linked Devices):\n");
-      qrcode.generate(qr, { small: true });
+      latestQR = qr;
+      console.log("\nNew QR generated. Visit your Render URL to scan it.");
+      console.log("(Or scan this in the terminal if running locally):\n");
+      qrcodeTerminal.generate(qr, { small: true });
     }
 
     if (connection === "close") {
@@ -60,6 +92,7 @@ async function startBot() {
         console.log("Logged out. Delete the auth_info folder and restart to re-login.");
       }
     } else if (connection === "open") {
+      latestQR = null;
       console.log(`${BOT_NAME} is connected and online! ✅`);
     }
   });
