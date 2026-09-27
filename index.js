@@ -17,6 +17,9 @@ const { handleMessage } = require("./lib/router");
 const OWNER_NUMBER = "254111783552";
 const BOT_NAME = "ADEZ MD";
 const PREFIX = ".";
+const MODE = "public"; // "public" = anyone can use commands, "private" = owner only
+const TOTAL_COMMANDS = 61; // update this if you add/remove commands in lib/router.js
+const DEVELOPER = "Arnold Adez";
 const PORT = process.env.PORT || 3000;
 
 let latestQR = null; // holds the current QR string so the web page can render it
@@ -131,8 +134,11 @@ async function startBot() {
           .sendMessage(ownerJid, {
             text:
               `✅ *${BOT_NAME}* linked successfully!\n\n` +
-              `Your bot is now online and ready to use.\n` +
-              `Prefix: ${PREFIX}\n\n` +
+              `Bot Name: ${BOT_NAME}\n` +
+              `Prefix: ${PREFIX}\n` +
+              `Mode: ${MODE}\n` +
+              `Commands: ${TOTAL_COMMANDS}\n` +
+              `Developer: ${DEVELOPER}\n\n` +
               `Send *${PREFIX}menu* to see all commands.`,
           })
           .catch((err) => console.error("Failed to send link alert:", err));
