@@ -1,20 +1,18 @@
 const {
   default: makeWASocket,
-  useMultiFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
 const pino = require("pino");
-const qrcodeTerminal = require("qrcode-terminal");
 const qrcode = require("qrcode");
 const express = require("express");
 const path = require("path");
 
 const { handleMessage } = require("./lib/router");
+const { useSupabaseAuthState } = require("./lib/authState");
+const { upsertSession, getResumableSessions, removeSession } = require("./lib/supabase");
 
-// Your WhatsApp number (used to recognize owner commands)
-const OWNER_NUMBER = "254111783552";
 const BOT_NAME = "ADEZ MD";
 const PREFIX = ".";
 const MODE = "public"; // "public" = anyone can use commands, "private" = owner only
@@ -22,11 +20,14 @@ const TOTAL_COMMANDS = 61; // update this if you add/remove commands in lib/rout
 const DEVELOPER = "Arnold Adez";
 const PORT = process.env.PORT || 3000;
 
-let latestQR = null; // holds the current QR string so the web page can render it
-let sock = null; // holds the active socket so routes below can use it
-let hasAlertedOwner = false; // ensures the link-success alert only fires once per run
+// One entry per linked phone number: { sock, qr, status, hasAlertedOwner }
+const sessions = new Map();
 
-// --- Web server: shows a scannable QR page at your Render URL ---
+function normalizeNumber(raw) {
+  return (raw || "").replace(/[^0-9]/g, "");
+}
+
+// --- Web server: pairing page where anyone can link their own number ---
 const app = express();
 app.use(express.static(path.join(__dirname, "public")));
 
@@ -35,37 +36,47 @@ app.get("/", (req, res) => {
 });
 
 app.get("/qr", async (req, res) => {
-  if (!latestQR) {
-    res.status(404).send("No QR available");
+  const phone = normalizeNumber(req.query.phone);
+  const session = sessions.get(phone);
+
+  if (!session || !session.qr) {
+    res.status(404).send("No QR available yet. Request a code/QR first, or it may already be connected.");
     return;
   }
   try {
-    const buffer = await qrcode.toBuffer(latestQR, { width: 280 });
+    const buffer = await qrcode.toBuffer(session.qr, { width: 280 });
     res.type("png").send(buffer);
   } catch (err) {
     res.status(500).send("Failed to generate QR");
   }
 });
 
-// Request a pairing code for a given phone number (digits only, country code first, no +)
-app.get("/request-code", async (req, res) => {
-  const number = (req.query.number || "").replace(/[^0-9]/g, "");
+// Reports how a session is doing, so the pairing page knows when to stop polling.
+app.get("/status", (req, res) => {
+  const phone = normalizeNumber(req.query.phone);
+  const session = sessions.get(phone);
+  res.json({ status: session?.status || "not_started" });
+});
 
-  if (!number) {
+// Request a pairing code for a given phone number (digits only, country code first, no +).
+// Starts a brand-new session for that number if one isn't already running.
+app.get("/request-code", async (req, res) => {
+  const phone = normalizeNumber(req.query.number);
+
+  if (!phone) {
     res.status(400).json({ error: "Provide a phone number, e.g. ?number=254111783552" });
-    return;
-  }
-  if (!sock) {
-    res.status(503).json({ error: "Bot is still starting up. Try again in a few seconds." });
-    return;
-  }
-  if (sock.authState?.creds?.registered) {
-    res.status(400).json({ error: "Already connected. No pairing needed." });
     return;
   }
 
   try {
-    const code = await sock.requestPairingCode(number);
+    const session = await startSession(phone);
+
+    if (session.sock.authState?.creds?.registered) {
+      res.status(400).json({ error: "This number is already connected. No pairing needed." });
+      return;
+    }
+
+    const code = await session.sock.requestPairingCode(phone);
     res.json({ code });
   } catch (err) {
     console.error("Pairing code error:", err);
@@ -77,59 +88,63 @@ app.listen(PORT, () => {
   console.log(`Pairing page running on port ${PORT}`);
 });
 
-async function startBot() {
-  // Where the login session is saved, so you don't have to scan the QR every restart
-  const { state, saveCreds } = await useMultiFileAuthState(
-    path.join(__dirname, "auth_info")
-  );
+// Starts (or returns the already-running) session for one phone number.
+// Each session is fully independent: its own socket, its own Supabase-stored
+// auth state (namespaced by phone), its own QR/pairing flow.
+async function startSession(phone) {
+  const existing = sessions.get(phone);
+  if (existing && existing.sock) return existing;
 
+  const session = { sock: null, qr: null, status: "pairing", hasAlertedOwner: false };
+  sessions.set(phone, session);
+
+  const { state, saveCreds, clearSession } = await useSupabaseAuthState(phone);
   const { version } = await fetchLatestBaileysVersion();
 
-  sock = makeWASocket({
+  const sock = makeWASocket({
     version,
     auth: state,
-    logger: pino({ level: "silent" }), // set to "info" if you want to see raw logs
-    printQRInTerminal: false, // we handle the QR ourselves below
+    logger: pino({ level: "silent" }),
+    printQRInTerminal: false,
   });
+  session.sock = sock;
 
-  // Save login credentials whenever they update
   sock.ev.on("creds.update", saveCreds);
 
-  // Handle connection open/close/QR events
-  sock.ev.on("connection.update", (update) => {
+  sock.ev.on("connection.update", async (update) => {
     const { connection, lastDisconnect, qr } = update;
 
     if (qr) {
-      latestQR = qr;
-      console.log("\nNew QR generated. Visit your Render URL to scan it.");
-      console.log("(Or scan this in the terminal if running locally):\n");
-      qrcodeTerminal.generate(qr, { small: true });
+      session.qr = qr;
+      session.status = "pairing";
+      console.log(`[${phone}] New QR/pairing code generated.`);
     }
 
     if (connection === "close") {
       const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      const shouldReconnect = statusCode !== DisconnectReason.loggedOut;
+      const loggedOut = statusCode === DisconnectReason.loggedOut;
 
-      console.log(
-        "Connection closed. Reconnecting:",
-        shouldReconnect,
-        "| reason:",
-        statusCode
-      );
+      console.log(`[${phone}] Connection closed. Reconnecting:`, !loggedOut, "| reason:", statusCode);
 
-      if (shouldReconnect) {
-        startBot();
+      sessions.delete(phone);
+
+      if (loggedOut) {
+        await clearSession();
+        await removeSession(phone);
+        console.log(`[${phone}] Logged out. Session cleared — they'll need to pair fresh.`);
       } else {
-        console.log("Logged out. Delete the auth_info folder and restart to re-login.");
+        await upsertSession(phone, "disconnected");
+        startSession(phone); // reconnect with the same stored credentials
       }
     } else if (connection === "open") {
-      latestQR = null;
-      console.log(`${BOT_NAME} is connected and online! ✅`);
+      session.qr = null;
+      session.status = "connected";
+      await upsertSession(phone, "connected");
+      console.log(`[${phone}] ${BOT_NAME} is connected and online! ✅`);
 
-      // Send a one-time alert to the owner confirming the link worked
-      if (!hasAlertedOwner) {
-        hasAlertedOwner = true;
-        const ownerJid = `${OWNER_NUMBER}@s.whatsapp.net`;
+      if (!session.hasAlertedOwner) {
+        session.hasAlertedOwner = true;
+        const ownerJid = `${phone}@s.whatsapp.net`;
         sock
           .sendMessage(ownerJid, {
             text:
@@ -139,14 +154,14 @@ async function startBot() {
               `Mode: ${MODE}\n` +
               `Commands: ${TOTAL_COMMANDS}\n` +
               `Developer: ${DEVELOPER}\n\n` +
-              `Send *${PREFIX}menu* to see all commands.`,
+              `Send *${PREFIX}menu* to see all commands.\n\n` +
+              `This bot is now linked to your own number — you're the owner of this instance.`,
           })
-          .catch((err) => console.error("Failed to send link alert:", err));
+          .catch((err) => console.error(`[${phone}] Failed to send link alert:`, err));
       }
     }
   });
 
-  // Handle incoming messages
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
     if (type !== "notify") return;
 
@@ -154,11 +169,24 @@ async function startBot() {
     if (!msg.message) return;
 
     try {
-      await handleMessage(sock, msg, { PREFIX, OWNER_NUMBER, BOT_NAME });
+      // Each session's owner is whoever linked that number — not a shared global owner.
+      await handleMessage(sock, msg, { PREFIX, OWNER_NUMBER: phone, BOT_NAME, botPhone: phone });
     } catch (err) {
-      console.error("Error handling message:", err);
+      console.error(`[${phone}] Error handling message:`, err);
     }
   });
+
+  return session;
 }
 
-startBot().catch((err) => console.error("Failed to start bot:", err));
+// On boot, reconnect every session that was previously linked and not logged out,
+// so a Render redeploy doesn't force everyone to re-scan.
+async function resumeAllSessions() {
+  const phones = await getResumableSessions();
+  console.log(`Resuming ${phones.length} previously linked session(s)...`);
+  for (const phone of phones) {
+    startSession(phone).catch((err) => console.error(`[${phone}] Failed to resume:`, err));
+  }
+}
+
+resumeAllSessions();
