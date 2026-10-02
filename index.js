@@ -163,10 +163,14 @@ async function startSession(phone) {
   });
 
   sock.ev.on("messages.upsert", async ({ messages, type }) => {
+    console.log(`[${phone}] [MSG UPSERT] type=${type} count=${messages.length}`);
     if (type !== "notify") return;
 
     const msg = messages[0];
-    if (!msg.message) return;
+    if (!msg.message) {
+      console.log(`[${phone}] [MSG UPSERT] message had no content (likely a protocol/system message), skipping`);
+      return;
+    }
 
     try {
       // Each session's owner is whoever linked that number — not a shared global owner.
