@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ADEZ MD - Pair Device</title>
+  <title>ADEZ MD - Link Your Number</title>
   <style>
     body {
       background: #0f172a;
@@ -39,7 +39,7 @@
       color: #475569;
       font-size: 13px;
     }
-    .code-box {
+    .box {
       background: #1e293b;
       padding: 16px 20px;
       border-radius: 10px;
@@ -47,8 +47,8 @@
       max-width: 280px;
       box-sizing: border-box;
     }
-    .code-box p { margin: 0 0 10px; color: #cbd5e1; font-size: 14px; }
-    .code-box input {
+    .box p { margin: 0 0 10px; color: #cbd5e1; font-size: 14px; }
+    input {
       width: 100%;
       padding: 8px 10px;
       border-radius: 6px;
@@ -59,7 +59,7 @@
       margin-bottom: 10px;
       font-size: 14px;
     }
-    .code-box button {
+    button {
       width: 100%;
       padding: 8px 10px;
       border-radius: 6px;
@@ -68,43 +68,118 @@
       color: #052e16;
       font-weight: bold;
       cursor: pointer;
+      margin-bottom: 8px;
     }
+    button:disabled { background: #334155; color: #94a3b8; cursor: not-allowed; }
     #codeResult {
       margin-top: 12px;
       font-size: 18px;
       letter-spacing: 1px;
     }
+    #linkedBanner {
+      display: none;
+      margin-top: 20px;
+      padding: 14px 20px;
+      background: #14532d;
+      color: #bbf7d0;
+      border-radius: 10px;
+      font-weight: bold;
+    }
   </style>
 </head>
 <body>
   <h1>ADEZ MD</h1>
-  <p>Scan this with WhatsApp → Linked Devices</p>
-  <img src="/qr" alt="QR Code" onerror="this.style.display='none'; document.getElementById('fallback').style.display='block';" />
-  <div id="fallback" style="display:none; color:#f87171;">
-    No QR available right now. If the bot is already connected, you don't need this page.
-  </div>
+  <p>Link your own WhatsApp number to get your own bot</p>
 
-  <div class="divider">— or —</div>
-
-  <div class="code-box">
-    <p>Get a pairing code instead</p>
+  <div class="box">
+    <p>Enter your WhatsApp number (country code, digits only, no +)</p>
     <input id="numberInput" type="text" placeholder="e.g. 254111783552" />
-    <button onclick="requestCode()">Get Code</button>
-    <div id="codeResult"></div>
+    <button onclick="showQR()">Show QR Code</button>
+    <button onclick="requestCode()">Get Pairing Code Instead</button>
   </div>
 
-  <div class="status">This page refreshes every 5 seconds automatically.</div>
+  <div id="codeResult"></div>
+  <img id="qrImg" style="display:none" alt="QR Code" />
+  <div id="qrFallback" style="display:none; color:#f87171; margin-top:16px;">
+    No QR yet — click "Show QR Code" after entering your number.
+  </div>
+
+  <div id="linkedBanner">✅ Linked successfully! You can close this page.</div>
+
+  <div class="status" id="statusLine"></div>
 
   <script>
+    let currentPhone = null;
+    let pollTimer = null;
+
+    function getPhone() {
+      const val = document.getElementById('numberInput').value.trim().replace(/[^0-9]/g, '');
+      return val;
+    }
+
+    function startPolling(phone) {
+      if (pollTimer) clearInterval(pollTimer);
+      currentPhone = phone;
+      pollTimer = setInterval(checkStatus, 3000);
+      checkStatus();
+    }
+
+    async function checkStatus() {
+      if (!currentPhone) return;
+      try {
+        const res = await fetch('/status?phone=' + encodeURIComponent(currentPhone));
+        const data = await res.json();
+        const statusLine = document.getElementById('statusLine');
+
+        if (data.status === 'connected') {
+          document.getElementById('linkedBanner').style.display = 'block';
+          document.getElementById('qrImg').style.display = 'none';
+          statusLine.textContent = '';
+          clearInterval(pollTimer);
+        } else if (data.status === 'pairing') {
+          statusLine.textContent = 'Waiting for you to scan/enter the code on your phone...';
+          const img = document.getElementById('qrImg');
+          if (img.style.display !== 'none') {
+            img.src = '/qr?phone=' + encodeURIComponent(currentPhone) + '&t=' + Date.now();
+          }
+        }
+      } catch (err) {
+        // ignore transient errors, keep polling
+      }
+    }
+
+    async function showQR() {
+      const phone = getPhone();
+      if (!phone) { alert('Enter your phone number first.'); return; }
+
+      document.getElementById('linkedBanner').style.display = 'none';
+      const img = document.getElementById('qrImg');
+      img.style.display = 'block';
+      img.onerror = () => { document.getElementById('qrFallback').style.display = 'block'; };
+      img.onload = () => { document.getElementById('qrFallback').style.display = 'none'; };
+
+      // Kick off session creation by requesting a pairing code in the background
+      // (this also starts the session even if the user only wants the QR).
+      fetch('/request-code?number=' + encodeURIComponent(phone)).catch(() => {});
+
+      img.src = '/qr?phone=' + encodeURIComponent(phone) + '&t=' + Date.now();
+      startPolling(phone);
+    }
+
     async function requestCode() {
-      const number = document.getElementById('numberInput').value.trim();
+      const phone = getPhone();
+      if (!phone) { alert('Enter your phone number first.'); return; }
+
       const resultEl = document.getElementById('codeResult');
       resultEl.textContent = 'Requesting...';
+      document.getElementById('linkedBanner').style.display = 'none';
+
       try {
-        const res = await fetch('/request-code?number=' + encodeURIComponent(number));
+        const res = await fetch('/request-code?number=' + encodeURIComponent(phone));
         const data = await res.json();
         if (data.code) {
           resultEl.innerHTML = 'Your code: <strong>' + data.code + '</strong>';
+          startPolling(phone);
         } else {
           resultEl.textContent = data.error || 'Something went wrong.';
         }
@@ -112,12 +187,6 @@
         resultEl.textContent = 'Request failed. Try again.';
       }
     }
-
-    // Refresh just the QR image every 5s, without touching the code form
-    setInterval(() => {
-      const img = document.querySelector('img[alt="QR Code"]');
-      if (img) img.src = '/qr?t=' + Date.now();
-    }, 5000);
   </script>
 </body>
 </html>
