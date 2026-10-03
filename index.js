@@ -22,6 +22,11 @@ const PORT = process.env.PORT || 3000;
 // One entry per linked phone number: { sock, qr, status, hasAlertedOwner }
 const sessions = new Map();
 
+// Tracks consecutive failed reconnect attempts per phone, so we back off
+// instead of hammering WhatsApp's servers (which can get an attempt rejected).
+const retryCounts = new Map();
+const MAX_AUTO_RETRIES = 5;
+
 function normalizeNumber(raw) {
   return (raw || "").replace(/[^0-9]/g, "");
 }
@@ -121,19 +126,35 @@ async function startSession(phone) {
       const statusCode = new Boom(lastDisconnect?.error)?.output?.statusCode;
       const loggedOut = statusCode === DisconnectReason.loggedOut;
 
-      console.log(`[${phone}] Connection closed. Reconnecting:`, !loggedOut, "| reason:", statusCode);
-
       sessions.delete(phone);
 
       if (loggedOut) {
+        retryCounts.delete(phone);
         await clearSession();
         await removeSession(phone);
         console.log(`[${phone}] Logged out. Session cleared — they'll need to pair fresh.`);
       } else {
+        const attempts = (retryCounts.get(phone) || 0) + 1;
+        retryCounts.set(phone, attempts);
         await upsertSession(phone, "disconnected");
-        startSession(phone); // reconnect with the same stored credentials
+
+        if (attempts > MAX_AUTO_RETRIES) {
+          console.log(
+            `[${phone}] Giving up after ${attempts} failed attempts (reason ${statusCode}). ` +
+              `Request a fresh code/QR on the pairing page to try again.`
+          );
+          return;
+        }
+
+        const delay = Math.min(2000 * attempts, 20000);
+        console.log(
+          `[${phone}] Connection closed (reason ${statusCode}). Retrying in ${Math.round(delay / 1000)}s ` +
+            `(attempt ${attempts}/${MAX_AUTO_RETRIES})...`
+        );
+        setTimeout(() => startSession(phone), delay);
       }
     } else if (connection === "open") {
+      retryCounts.delete(phone);
       session.qr = null;
       session.status = "connected";
       await upsertSession(phone, "connected");
@@ -191,4 +212,4 @@ async function resumeAllSessions() {
 }
 
 resumeAllSessions();
-      
+          
