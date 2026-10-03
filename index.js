@@ -1,6 +1,5 @@
 const {
   default: makeWASocket,
-  fetchLatestBaileysVersion,
   DisconnectReason,
 } = require("@whiskeysockets/baileys");
 const { Boom } = require("@hapi/boom");
@@ -99,10 +98,8 @@ async function startSession(phone) {
   sessions.set(phone, session);
 
   const { state, saveCreds, clearSession } = await useSupabaseAuthState(phone);
-  const { version } = await fetchLatestBaileysVersion();
 
   const sock = makeWASocket({
-    version,
     auth: state,
     logger: pino({ level: "silent" }),
     printQRInTerminal: false,
@@ -194,3 +191,4 @@ async function resumeAllSessions() {
 }
 
 resumeAllSessions();
+      
