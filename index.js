@@ -26,6 +26,36 @@ const {
 } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 
+// ---------- Quiet the encryption log spam ----------
+// libsignal prints whole session objects (including private keys) to the logs.
+// Hide them and show one summary line per minute instead.
+const NOISE_PREFIXES = [
+  'Closing session',
+  'Closing open session',
+  'Failed to decrypt message with any known session',
+  'Session error:',
+  'Bad MAC',
+  'Decrypted message with closed session',
+  'Removing old closed session'
+]
+let noiseCount = 0
+for (const fn of ['log', 'info', 'warn', 'error']) {
+  const orig = console[fn].bind(console)
+  console[fn] = (...args) => {
+    if (typeof args[0] === 'string' && NOISE_PREFIXES.some((p) => args[0].startsWith(p))) {
+      noiseCount++
+      return
+    }
+    orig(...args)
+  }
+}
+setInterval(() => {
+  if (noiseCount > 0) {
+    console.log(`ℹ️ Hid ${noiseCount} encryption log lines in the last minute`)
+    noiseCount = 0
+  }
+}, 60 * 1000).unref()
+
 // ---------- Settings ----------
 const BOT_NAME = process.env.BOT_NAME || 'ADEZ MD'
 const OWNER_NUMBER = (process.env.OWNER_NUMBER || '').replace(/\D/g, '')
@@ -342,4 +372,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-    
+          
