@@ -33,7 +33,6 @@ import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 import { registerCallGuard } from './lib/protect.js'
-import { autoFollowChannel } from './lib/channel.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -69,7 +68,6 @@ const PORT = process.env.PORT || 3000
 const MAIN_ID = 'session'
 const SESSIONS_ROOT = path.resolve('./sessions')
 const OWNER_NUMBER = String(process.env.OWNER_NUMBER || '').replace(/\D/g, '') // owner's own number
-const CHANNEL_ON = !!(process.env.CHANNEL_LINK || process.env.CHANNEL_JID) // auto-follow your channel
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20) // includes the main session
 const STAGGER_MS = Number(process.env.STAGGER_MS || 4000) // gap between connections at startup
 const PAIR_TIMEOUT_MS = 3 * 60 * 1000 // give up if a new person does not finish pairing
@@ -386,7 +384,6 @@ async function startSession(s) {
         console.log(`✅ [${s.id}] ${BOT_NAME} connected! (${connectedCount()}/${sessions.size})`)
         if (s.isMain) startAutoBio(thisSock)
         uploadSession(s)
-        autoFollowChannel(thisSock)
 
         // Connected alert, sent to the number the session is linked with
         if (!s.welcomeSent) {
@@ -398,7 +395,6 @@ async function startSession(s) {
             ['owner', s.isMain ? 'Arnold Adez' : 'You'],
             ['prefix', `[ ${prefix} ]`],
             ['plugins', getAllCommands().length],
-            ...(CHANNEL_ON && !s.isMain ? [['channel', 'Follows our updates channel (unfollow anytime)']] : []),
             ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
           ]) + `\n\n_Type ${prefix}menu to see all commands_`
           const image = process.env.MENU_IMAGE
@@ -547,4 +543,5 @@ process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
-process.on('uncaughtException', (e) => console.log('Uncaught exception:', e
+process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
+  
