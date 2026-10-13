@@ -27,7 +27,7 @@ const {
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
-import { loadSettings } from './lib/settings.js'
+import { loadSettings, getSetting } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 
 // ---------- Quiet the encryption log spam ----------
@@ -272,7 +272,7 @@ async function startBot() {
         // Connected alert: sent to the number the bot is linked with
         if (!welcomeSent) {
           welcomeSent = true
-          const prefix = process.env.PREFIX || '.'
+          const prefix = getSetting('prefix') || '.'
           const botJid = String(thisSock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
           const alert = box(`${BOT_NAME} LINKED`, [
             ['status', 'Connected successfully ✅'],
