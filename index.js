@@ -11,8 +11,13 @@ import pino from 'pino'
 import QRCode from 'qrcode'
 import AdmZip from 'adm-zip'
 import { createClient } from '@supabase/supabase-js'
-import baileys from '@whiskeysockets/baileys'
-const makeWASocket = baileys.default || baileys.makeWASocket || baileys
+import * as baileysNS from '@whiskeysockets/baileys'
+// Works with both builds: named exports (newer) or everything under .default (older)
+const baileys = baileysNS.useMultiFileAuthState ? baileysNS : (baileysNS.default ?? baileysNS)
+const makeWASocket =
+  baileysNS.makeWASocket ||
+  (typeof baileysNS.default === 'function' ? baileysNS.default : baileysNS.default?.default) ||
+  baileys.makeWASocket
 const {
   useMultiFileAuthState,
   DisconnectReason,
@@ -310,4 +315,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-                                                                                    
+    
