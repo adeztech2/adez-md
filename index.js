@@ -54,6 +54,15 @@ let starting = false
 let sessionWasLive = false // true only if this login really worked (restored from Supabase or reached 'open')
 let startTimer = null
 let pendingSave = Promise.resolve()
+let syncInterval = null
+// Remember recent messages so WhatsApp can ask the bot to re-send one
+// that the phone could not decrypt ("Waiting for this message").
+const msgCache = new Map()
+function cacheMessage(m) {
+  if (!m?.key?.id || !m.message) return
+  msgCache.set(m.key.id, m.message)
+  if (msgCache.size > 2000) msgCache.delete(msgCache.keys().next().value)
+}
 
 app.get('/', (req, res) => {
   res.json({ status: 'ok', bot: BOT_NAME, connection: botStatus, uptime: Math.floor(process.uptime()) })
@@ -179,7 +188,8 @@ async function startBot() {
       syncFullHistory: false,
       fireInitQueries: false,
       markOnlineOnConnect: false,
-      generateHighQualityLinkPreview: false
+      generateHighQualityLinkPreview: false,
+      getMessage: async (key) => msgCache.get(key?.id)
     })
     sock = thisSock
 
@@ -209,6 +219,20 @@ async function startBot() {
         sessionWasLive = true
         console.log(`✅ ${BOT_NAME} connected!`)
         uploadSession()
+
+        // Encryption key files change on every message without a creds update,
+        // so also save whenever any file in the session folder changed.
+        if (!syncInterval) {
+          syncInterval = setInterval(() => {
+            if (botStatus !== 'connected') return
+            try {
+              const changed = fs
+                .readdirSync(SESSION_DIR)
+                .some((f) => fs.statSync(path.join(SESSION_DIR, f)).mtimeMs > lastSync)
+              if (changed) uploadSession()
+            } catch {}
+          }, SYNC_INTERVAL)
+        }
 
         if (OWNER_NUMBER && !welcomeSent) {
           welcomeSent = true
@@ -246,8 +270,10 @@ async function startBot() {
         // Another copy is using this login. Exit WITHOUT logging out,
         // because logout would also kill the login the other copy is using.
         if (code === DisconnectReason.connectionReplaced || msg.toLowerCase().includes('conflict')) {
-          console.log('🚨 Another copy of the bot is running. Exiting this one.')
-          process.exit(1)
+          botStatus = 'conflict'
+          console.log('🚨 CONFLICT: another copy is using this WhatsApp login. Stopping here (no logout, no restart loop). Stop the other copy, then redeploy.')
+          stopSocket()
+          return
         }
 
         // A login that worked before was really logged out: clear everything.
@@ -279,6 +305,7 @@ async function startBot() {
 
     thisSock.ev.on('messages.upsert', async ({ messages, type }) => {
       if (thisSock !== sock) return
+      for (const m of messages) cacheMessage(m)
       if (type !== 'notify') return
       for (const m of messages) {
         try {
