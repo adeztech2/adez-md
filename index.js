@@ -30,9 +30,8 @@ const {
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
-import { loadSettings, getSetting, runAs } from './lib/settings.js'
+import { loadSettings, getSetting } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
-import { registerCallGuard } from './lib/protect.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -208,12 +207,6 @@ async function restoreSession(s) {
       fs.rmSync(s.dir, { recursive: true, force: true })
       fs.mkdirSync(s.dir, { recursive: true })
       new AdmZip(Buffer.from(data.data, 'base64')).extractAllTo(s.dir, true)
-      // Keep ONLY creds.json. Old encryption-key files in a saved copy are usually out of date,
-      // and stale keys are what make WhatsApp show "Waiting for this message".
-      // Fresh keys are created automatically on the next messages.
-      for (const f of fs.readdirSync(s.dir)) {
-        if (f !== 'creds.json') fs.rmSync(path.join(s.dir, f), { recursive: true, force: true })
-      }
       s.live = true
       console.log(`✅ [${s.id}] Session restored from Supabase`)
     } else {
@@ -229,10 +222,8 @@ async function uploadSession(s) {
     if (s.removed || s.status !== 'connected') return // never save half-finished logins
     if (!fs.existsSync(s.dir)) return
     await s.pendingSave
-    const credsFile = path.join(s.dir, 'creds.json')
-    if (!fs.existsSync(credsFile)) return
     const zip = new AdmZip()
-    zip.addLocalFile(credsFile) // only the login, never the encryption keys
+    zip.addLocalFolder(s.dir)
     const base64 = zip.toBuffer().toString('base64')
     const { error } = await supabase.from('bu_sessions').upsert({ id: s.id, data: base64 })
     if (error) throw error
@@ -290,19 +281,6 @@ async function removeSession(s, reason) {
   await clearSavedSession(s)
 }
 
-// Lets the restart command reconnect only the session that asked for it
-globalThis.__adez = {
-  restartSession(sock) {
-    for (const s of sessions.values()) {
-      if (s.sock === sock) {
-        scheduleStart(s, 500)
-        return true
-      }
-    }
-    return false
-  }
-}
-
 // ---------- Start one WhatsApp connection ----------
 async function startSession(s) {
   if (s.starting || s.removed) return
@@ -333,7 +311,6 @@ async function startSession(s) {
     })
     s.sock = thisSock
     registerEvents(thisSock)
-    registerCallGuard(thisSock)
 
     thisSock.ev.on('creds.update', () => {
       s.pendingSave = s.pendingSave
@@ -385,6 +362,19 @@ async function startSession(s) {
         if (s.isMain) startAutoBio(thisSock)
         uploadSession(s)
 
+        // Save whenever any key file changed (spread out so sessions do not zip all at once)
+        if (!s.syncInterval) {
+          s.syncInterval = setInterval(() => {
+            if (s.status !== 'connected') return
+            try {
+              const changed = fs
+                .readdirSync(s.dir)
+                .some((f) => fs.statSync(path.join(s.dir, f)).mtimeMs > s.lastSync)
+              if (changed) uploadSession(s)
+            } catch {}
+          }, SYNC_INTERVAL + Math.floor(Math.random() * 30000))
+        }
+
         // Connected alert, sent to the number the session is linked with
         if (!s.welcomeSent) {
           s.welcomeSent = true
@@ -426,11 +416,7 @@ async function startSession(s) {
         }
 
         // Another copy is using this login. Stop WITHOUT logging out.
-        // (401 + "conflict" means the device was removed from the phone = logged out, handled below)
-        if (
-          code === DisconnectReason.connectionReplaced ||
-          (code !== DisconnectReason.loggedOut && msg.toLowerCase().includes('conflict'))
-        ) {
+        if (code === DisconnectReason.connectionReplaced || msg.toLowerCase().includes('conflict')) {
           s.status = 'conflict'
           console.log(`🚨 [${s.id}] CONFLICT: another copy uses this login. Stopping this session.`)
           stopSocket(s)
@@ -477,9 +463,7 @@ async function startSession(s) {
       if (type !== 'notify') return
       for (const m of messages) {
         try {
-          // Run as this person so prefix, mode, banned list etc. are THEIR own settings
-          const who = String(thisSock.user?.id || '').split(':')[0].split('@')[0]
-          await runAs(who, () => handleMessage(thisSock, m))
+          await handleMessage(thisSock, m)
         } catch (e) {
           console.log(`❌ [${s.id}] Message handler error:`, e.stack || e)
         }
@@ -492,20 +476,14 @@ async function startSession(s) {
 
 // ---------- Load every saved session at startup ----------
 async function startAllSessions() {
-  const ids = []
+  const ids = [MAIN_ID]
   try {
-    const { data, error } = await supabase.from('bu_sessions').select('id')
+    const { data, error } = await supabase.from('bu_sessions').select('id').like('id', 'user_%')
     if (error) throw error
-    const saved = (data || []).map((r) => r.id)
-    // The main login only starts if it has a saved session (or ENABLE_MAIN=true).
-    // Otherwise it would sit there making QR codes nobody scans.
-    if (saved.includes(MAIN_ID) || process.env.ENABLE_MAIN === 'true') ids.push(MAIN_ID)
-    for (const id of saved) if (id.startsWith('user_')) ids.push(id)
+    for (const row of data || []) ids.push(row.id)
   } catch (e) {
     console.log('⚠️ Could not list saved sessions:', e.message)
-    ids.push(MAIN_ID)
   }
-  if (!ids.length) console.log('ℹ️ No saved sessions yet. Open /pair.html to link a number.')
 
   console.log(`👥 Starting ${Math.min(ids.length, MAX_SESSIONS)} session(s) (max ${MAX_SESSIONS})`)
   for (const id of ids.slice(0, MAX_SESSIONS)) {
@@ -544,4 +522,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-  
+        
