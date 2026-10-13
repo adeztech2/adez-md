@@ -25,7 +25,8 @@ const {
   Browsers
 } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
-import { registerEvents } from './lib/events.js' // NEW
+import { registerEvents } from './lib/events.js'
+import { box } from './lib/style.js'
 
 // ---------- Quiet the encryption log spam ----------
 // libsignal prints whole session objects (including private keys) to the logs.
@@ -223,7 +224,7 @@ async function startBot() {
       getMessage: async (key) => msgCache.get(key?.id)
     })
     sock = thisSock
-    registerEvents(thisSock) // NEW
+    registerEvents(thisSock)
 
     thisSock.ev.on('creds.update', () => {
       pendingSave = pendingSave
@@ -268,12 +269,27 @@ async function startBot() {
 
         if (OWNER_NUMBER && !welcomeSent) {
           welcomeSent = true
+          const prefix = process.env.PREFIX || '.'
+          const alert = box(`${BOT_NAME} LINKED`, [
+            ['status', 'Connected successfully ✅'],
+            ['owner', 'Arnold Adez'],
+            ['prefix', `[ ${prefix} ]`],
+            ['plugins', getAllCommands().length],
+            ['host', 'Render'],
+            ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
+          ]) + `\n\n_Type ${prefix}menu to see all commands_`
+          const image = process.env.MENU_IMAGE
           try {
-            await thisSock.sendMessage(OWNER_NUMBER + '@s.whatsapp.net', {
-              text: `✅ *${BOT_NAME}* is online!\nCommands loaded: ${getAllCommands().length}`
-            })
-          } catch (e) {
-            console.log('⚠️ Could not send confirmation:', e.message)
+            await thisSock.sendMessage(
+              OWNER_NUMBER + '@s.whatsapp.net',
+              image ? { image: { url: image }, caption: alert } : { text: alert }
+            )
+          } catch {
+            try {
+              await thisSock.sendMessage(OWNER_NUMBER + '@s.whatsapp.net', { text: alert })
+            } catch (e) {
+              console.log('⚠️ Could not send confirmation:', e.message)
+            }
           }
         }
       }
