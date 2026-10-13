@@ -46,6 +46,7 @@ let lastQR = null
 let restored = false
 let welcomeSent = false
 let starting = false
+let sessionWasLive = false // true only if this login really worked (restored from Supabase or reached 'open')
 let startTimer = null
 let pendingSave = Promise.resolve()
 
@@ -62,9 +63,10 @@ io.on('connection', (client) => {
     try {
       const clean = String(number || '').replace(/\D/g, '')
       if (!clean) return client.emit('pairError', 'Enter your number with country code')
-      if (!sock) return client.emit('pairError', 'Bot not ready yet, try again in a few seconds')
-      if (sock.authState?.creds?.me?.id || sock.authState?.creds?.registered) {
-        return client.emit('pairError', 'Already logged in')
+      if (botStatus === 'connected') return client.emit('pairError', 'Already logged in')
+      // A QR event means the socket is ready. Asking earlier makes pairing fail.
+      if (!sock || botStatus !== 'waiting_for_scan') {
+        return client.emit('pairError', 'Bot not ready yet, wait for the QR to appear and try again')
       }
       const code = await sock.requestPairingCode(clean)
       client.emit('pairCode', code)
@@ -83,6 +85,7 @@ async function restoreSession() {
       fs.rmSync(SESSION_DIR, { recursive: true, force: true })
       fs.mkdirSync(SESSION_DIR, { recursive: true })
       new AdmZip(Buffer.from(data.data, 'base64')).extractAllTo(SESSION_DIR, true)
+      sessionWasLive = true
       console.log('✅ Session restored from Supabase')
     } else {
       console.log('ℹ️ No saved session in Supabase (QR needed)')
@@ -198,6 +201,7 @@ async function startBot() {
         lastQR = null
         botStatus = 'connected'
         io.emit('status', botStatus)
+        sessionWasLive = true
         console.log(`✅ ${BOT_NAME} connected!`)
         uploadSession()
 
@@ -223,8 +227,9 @@ async function startBot() {
         const msg = String(err?.message || '')
         console.log(`❌ Connection closed. Code: ${code} | ${msg}`)
 
-        // Has this login ever finished pairing? (creds.me is set only after a good scan)
-        const paired = !!state.creds?.me?.id
+        // Did this login ever really work? (creds.me is NOT a safe check: requesting
+        // a pairing code sets it before any pairing has happened)
+        const paired = sessionWasLive
 
         // 515 = WhatsApp asks for a restart right after a successful scan. Just reconnect.
         if (code === DisconnectReason.restartRequired) {
@@ -244,6 +249,7 @@ async function startBot() {
         if (code === DisconnectReason.loggedOut && paired) {
           console.log('🔒 Logged out. Clearing saved session. Scan a new QR.')
           await clearSavedSession()
+          sessionWasLive = false
           restored = true
           scheduleStart(3000)
           return
@@ -254,6 +260,7 @@ async function startBot() {
         if (!paired) {
           console.log('🧹 Pairing did not finish. Starting fresh with a new QR.')
           fs.rmSync(SESSION_DIR, { recursive: true, force: true })
+          sessionWasLive = false
           restored = true // do NOT download the old saved session again
           scheduleStart(3000)
           return
@@ -303,4 +310,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-    
+                                                                                    
