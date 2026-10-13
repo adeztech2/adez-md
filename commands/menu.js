@@ -1,3 +1,5 @@
+import os from 'os'
+
 export const name = 'menu'
 export const category = 'Main'
 export const aliases = ['help', 'commands']
@@ -12,7 +14,18 @@ function uptime() {
   return `${h}h ${m}m`
 }
 
-export async function run({ reply, prefix, getAllCommands, isOwner }) {
+function ramBar() {
+  const used = process.memoryUsage().rss
+  const total = os.totalmem()
+  const pct = Math.min(100, Math.round((used / total) * 100))
+  const filled = Math.round(pct / 10)
+  const bar = '█'.repeat(filled) + '░'.repeat(10 - filled)
+  const usedMb = Math.round(used / 1024 / 1024)
+  const totalGb = (total / 1024 / 1024 / 1024).toFixed(0)
+  return { text: `[${bar}] ${pct}%`, usage: `${usedMb} MB of ${totalGb} GB` }
+}
+
+export async function run({ sock, from, m, reply, prefix, getAllCommands }) {
   const botName = process.env.BOT_NAME || 'ADEZ MD'
   const all = getAllCommands()
   const groups = {}
@@ -23,25 +36,40 @@ export async function run({ reply, prefix, getAllCommands, isOwner }) {
     groups[cat].push(cmd.name)
   }
 
-  let text = `┏━━━━━━━━━━━━━━━━━━┓\n`
-  text += `┃  ✦ *${botName}* ✦\n`
-  text += `┣━━━━━━━━━━━━━━━━━━┫\n`
-  text += `┃ ◈ Prefix   ➜ ${prefix}\n`
-  text += `┃ ◈ Owner    ➜ Arnold Adez\n`
-  text += `┃ ◈ Commands ➜ ${all.length}\n`
-  text += `┃ ◈ Uptime   ➜ ${uptime()}\n`
-  text += `┃ ◈ Mode     ➜ ${isOwner ? 'Owner' : 'User'}\n`
-  text += `┗━━━━━━━━━━━━━━━━━━┛\n`
+  const sent = Number(m?.messageTimestamp || 0) * 1000
+  const speed = sent ? Math.max(0, Date.now() - sent) : 0
+  const ram = ramBar()
+
+  let text = `┌▣ ◈ *${botName}* ◈\n`
+  text += `│ *OWNER* : Arnold Adez\n`
+  text += `│ *PREFIX* : [ ${prefix} ]\n`
+  text += `│ *HOST* : Render\n`
+  text += `│ *PLUGINS* : ${all.length}\n`
+  text += `│ *MODE* : Public\n`
+  text += `│ *VERSION* : 1.0.0\n`
+  text += `│ *SPEED* : ${speed} ms\n`
+  text += `│ *USAGE* : ${ram.usage}\n`
+  text += `│ *RAM* : ${ram.text}\n`
+  text += `│ *UPTIME* : ${uptime()}\n`
+  text += `└▣\n`
 
   for (const [cat, names] of Object.entries(groups)) {
-    text += `\n╭──『 *${cat.toUpperCase()}* 』\n`
+    text += `\n┌▣ ◈ *${cat.toUpperCase()} MENU* ◈\n`
     for (const n of names.sort()) {
-      text += `│ ➤ ${prefix}${n}\n`
+      text += `│ ➽ ${n}\n`
     }
-    text += `╰──────────────\n`
+    text += `└▣\n`
   }
 
-  text += `\n_Type ${prefix}<command> to use it_`
+  const image = process.env.MENU_IMAGE
+  if (image) {
+    try {
+      await sock.sendMessage(from, { image: { url: image }, caption: text }, { quoted: m })
+      return
+    } catch (e) {
+      console.log('Menu image failed, sending text only:', e.message)
+    }
+  }
 
   await reply(text)
 }
