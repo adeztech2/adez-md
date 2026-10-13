@@ -1,4 +1,4 @@
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD;WhatsApp+Automation+System;Built+by+ARNOLD+ADEZ; Oyugis,Nairobi%2C+Kenya+🇰🇪"/>
+ <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD;WhatsApp+Automation+System;Built+by+ARNOLD+ADEZ; Oyugis,Nairobi%2C+Kenya+🇰🇪"/>
 </h1>
 
 <p align="center">
