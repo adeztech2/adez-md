@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (the main brain / front door of the bot)
+//  ADEZ MD - index.js  (patched: safer pairing + session handling)
 // ============================================================
 import 'dotenv/config'
 import fs from 'fs'
@@ -21,13 +21,16 @@ const {
 } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 
-// ---------- Settings (read from .env or Render Environment Variables) ----------
+// ---------- Settings ----------
 const BOT_NAME = process.env.BOT_NAME || 'ADEZ MD'
 const OWNER_NUMBER = (process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 const PORT = process.env.PORT || 3000
 const SESSION_DIR = path.resolve('./session')
 const SESSION_ID = 'session'
 const SYNC_INTERVAL = 2 * 60 * 1000 // 2 minutes (throttle)
+// On Render a new deploy starts BEFORE the old copy stops. Wait a bit so
+// two copies never use the same WhatsApp login at the same time.
+const START_DELAY_MS = Number(process.env.START_DELAY_MS ?? (process.env.RENDER ? 15000 : 0))
 
 const logger = pino({ level: 'silent' })
 const supabase = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_KEY)
@@ -42,9 +45,10 @@ let botStatus = 'starting'
 let lastQR = null
 let restored = false
 let welcomeSent = false
-let everOpened = false
+let starting = false
+let startTimer = null
+let pendingSave = Promise.resolve()
 
-// Health endpoint for UptimeRobot
 app.get('/', (req, res) => {
   res.json({ status: 'ok', bot: BOT_NAME, connection: botStatus, uptime: Math.floor(process.uptime()) })
 })
@@ -54,13 +58,14 @@ io.on('connection', (client) => {
   client.emit('status', botStatus)
   if (lastQR) client.emit('qr', lastQR)
 
-  // Pair code: user types phone number on pair.html
   client.on('requestPair', async (number) => {
     try {
       const clean = String(number || '').replace(/\D/g, '')
       if (!clean) return client.emit('pairError', 'Enter your number with country code')
       if (!sock) return client.emit('pairError', 'Bot not ready yet, try again in a few seconds')
-      if (sock.authState?.creds?.registered) return client.emit('pairError', 'Already logged in')
+      if (sock.authState?.creds?.me?.id || sock.authState?.creds?.registered) {
+        return client.emit('pairError', 'Already logged in')
+      }
       const code = await sock.requestPairingCode(clean)
       client.emit('pairCode', code)
     } catch (e) {
@@ -94,6 +99,7 @@ async function uploadSession() {
     // Only save a login that really works (never a half-finished pairing)
     if (botStatus !== 'connected') return
     if (!fs.existsSync(SESSION_DIR)) return
+    await pendingSave
     const zip = new AdmZip()
     zip.addLocalFolder(SESSION_DIR)
     const base64 = zip.toBuffer().toString('base64')
@@ -106,7 +112,6 @@ async function uploadSession() {
   }
 }
 
-// Throttle: save at most once every 2 minutes
 function scheduleSync() {
   if (syncTimer) return
   const wait = Math.max(0, SYNC_INTERVAL - (Date.now() - lastSync))
@@ -121,111 +126,159 @@ async function clearSavedSession() {
   await supabase.from('bu_sessions').delete().eq('id', SESSION_ID)
 }
 
+// ---------- Helpers to keep ONE socket alive at a time ----------
+function stopSocket() {
+  if (!sock) return
+  const old = sock
+  sock = null
+  try { old.ev.removeAllListeners() } catch {}
+  try { old.end(undefined) } catch {}
+}
+
+function scheduleStart(ms) {
+  if (startTimer) clearTimeout(startTimer)
+  startTimer = setTimeout(() => {
+    startTimer = null
+    startBot().catch((e) => {
+      console.log('❌ startBot failed:', e.message)
+      scheduleStart(5000)
+    })
+  }, ms)
+}
+
 // ---------- Start the WhatsApp connection ----------
 async function startBot() {
-  if (!restored) {
-    await restoreSession()
-    restored = true
-  }
+  if (starting) return
+  starting = true
+  try {
+    stopSocket()
+    await pendingSave // make sure the last creds write finished
 
-  const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
-  const { version } = await fetchLatestBaileysVersion()
-
-  sock = makeWASocket({
-    version,
-    auth: state,
-    logger,
-    browser: Browsers.ubuntu('Chrome'),
-    printQRInTerminal: false,
-    syncFullHistory: false,
-    fireInitQueries: false,
-    markOnlineOnConnect: false,
-    generateHighQualityLinkPreview: false
-  })
-
-  sock.ev.on('creds.update', async () => {
-    await saveCreds()
-    scheduleSync()
-  })
-
-  sock.ev.on('connection.update', async (update) => {
-    const { connection, lastDisconnect, qr } = update
-
-    if (qr) {
-      lastQR = await QRCode.toDataURL(qr)
-      botStatus = 'waiting_for_scan'
-      io.emit('qr', lastQR)
-      io.emit('status', botStatus)
-      console.log('📱 QR ready - open /pair.html to scan')
+    if (!restored) {
+      await restoreSession()
+      restored = true
     }
 
-    if (connection === 'open') {
-      lastQR = null
-      botStatus = 'connected'
-      everOpened = true
-      io.emit('status', botStatus)
-      console.log(`✅ ${BOT_NAME} connected!`)
-      uploadSession()
+    const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR)
+    const { version } = await fetchLatestBaileysVersion()
 
-      if (OWNER_NUMBER && !welcomeSent) {
-        welcomeSent = true
-        try {
-          await sock.sendMessage(OWNER_NUMBER + '@s.whatsapp.net', {
-            text: `✅ *${BOT_NAME}* is online!\nCommands loaded: ${getAllCommands().length}`
-          })
-        } catch (e) {
-          console.log('⚠️ Could not send confirmation:', e.message)
+    const thisSock = makeWASocket({
+      version,
+      auth: state,
+      logger,
+      browser: Browsers.ubuntu('Chrome'),
+      printQRInTerminal: false,
+      syncFullHistory: false,
+      fireInitQueries: false,
+      markOnlineOnConnect: false,
+      generateHighQualityLinkPreview: false
+    })
+    sock = thisSock
+
+    thisSock.ev.on('creds.update', () => {
+      pendingSave = pendingSave
+        .then(() => saveCreds())
+        .catch((e) => console.log('⚠️ saveCreds failed:', e.message))
+      scheduleSync()
+    })
+
+    thisSock.ev.on('connection.update', async (update) => {
+      if (thisSock !== sock) return // ignore events from an old socket
+      const { connection, lastDisconnect, qr } = update
+
+      if (qr) {
+        lastQR = await QRCode.toDataURL(qr)
+        botStatus = 'waiting_for_scan'
+        io.emit('qr', lastQR)
+        io.emit('status', botStatus)
+        console.log('📱 QR ready - open /pair.html to scan')
+      }
+
+      if (connection === 'open') {
+        lastQR = null
+        botStatus = 'connected'
+        io.emit('status', botStatus)
+        console.log(`✅ ${BOT_NAME} connected!`)
+        uploadSession()
+
+        if (OWNER_NUMBER && !welcomeSent) {
+          welcomeSent = true
+          try {
+            await thisSock.sendMessage(OWNER_NUMBER + '@s.whatsapp.net', {
+              text: `✅ *${BOT_NAME}* is online!\nCommands loaded: ${getAllCommands().length}`
+            })
+          } catch (e) {
+            console.log('⚠️ Could not send confirmation:', e.message)
+          }
         }
       }
-    }
 
-    if (connection === 'close') {
-      botStatus = 'disconnected'
-      const err = lastDisconnect?.error
-      const code = err?.output?.statusCode
-      const msg = String(err?.message || '')
-      console.log(`❌ Connection closed. Code: ${code} | ${msg}`)
+      if (connection === 'close') {
+        botStatus = 'disconnected'
+        lastQR = null // never show a QR that belongs to a dead socket
+        io.emit('status', botStatus)
 
-      // Pairing timed out before login finished: throw away the half-finished login and start clean
-      if (code === DisconnectReason.timedOut && !everOpened) {
-        console.log('🧹 Pairing timed out. Starting fresh (request a new code).')
-        fs.rmSync(SESSION_DIR, { recursive: true, force: true })
-        restored = true // do NOT download the old saved session again
-        setTimeout(startBot, 3000)
-        return
+        const err = lastDisconnect?.error
+        const code = err?.output?.statusCode
+        const msg = String(err?.message || '')
+        console.log(`❌ Connection closed. Code: ${code} | ${msg}`)
+
+        // Has this login ever finished pairing? (creds.me is set only after a good scan)
+        const paired = !!state.creds?.me?.id
+
+        // 515 = WhatsApp asks for a restart right after a successful scan. Just reconnect.
+        if (code === DisconnectReason.restartRequired) {
+          console.log('🔄 Restart requested by WhatsApp (normal after scanning).')
+          scheduleStart(1000)
+          return
+        }
+
+        // Another copy is using this login. Exit WITHOUT logging out,
+        // because logout would also kill the login the other copy is using.
+        if (code === DisconnectReason.connectionReplaced || msg.toLowerCase().includes('conflict')) {
+          console.log('🚨 Another copy of the bot is running. Exiting this one.')
+          process.exit(1)
+        }
+
+        // A login that worked before was really logged out: clear everything.
+        if (code === DisconnectReason.loggedOut && paired) {
+          console.log('🔒 Logged out. Clearing saved session. Scan a new QR.')
+          await clearSavedSession()
+          restored = true
+          scheduleStart(3000)
+          return
+        }
+
+        // Pairing never finished (QR timeout 408, 500 "Invalid account signature",
+        // or 401 on half-made credentials). Wipe ONLY the local half-login and start clean.
+        if (!paired) {
+          console.log('🧹 Pairing did not finish. Starting fresh with a new QR.')
+          fs.rmSync(SESSION_DIR, { recursive: true, force: true })
+          restored = true // do NOT download the old saved session again
+          scheduleStart(3000)
+          return
+        }
+
+        // Anything else: just reconnect
+        console.log('🔄 Reconnecting in 5 seconds...')
+        scheduleStart(5000)
       }
+    })
 
-      // Conflict = bot running twice somewhere. Kill this one.
-      if (msg.toLowerCase().includes('conflict')) {
-        console.log('🚨 Stream Errored (conflict): another copy of the bot is running. Logging out and exiting.')
-        try { await sock.logout() } catch {}
-        process.exit(1)
+    thisSock.ev.on('messages.upsert', async ({ messages, type }) => {
+      if (thisSock !== sock) return
+      if (type !== 'notify') return
+      for (const m of messages) {
+        try {
+          await handleMessage(thisSock, m)
+        } catch (e) {
+          console.log('❌ Message handler error:', e.stack || e)
+        }
       }
-
-      // Logged out = session no longer valid. Clear and start fresh.
-      if (code === DisconnectReason.loggedOut) {
-        console.log('🔒 Logged out. Clearing saved session. Scan a new QR.')
-        await clearSavedSession()
-        setTimeout(startBot, 3000)
-        return
-      }
-
-      // Anything else: reconnect
-      console.log('🔄 Reconnecting in 5 seconds...')
-      setTimeout(startBot, 5000)
-    }
-  })
-
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    if (type !== 'notify') return
-    for (const m of messages) {
-      try {
-        await handleMessage(sock, m)
-      } catch (e) {
-        console.log('❌ Message handler error:', e.stack || e)
-      }
-    }
-  })
+    })
+  } finally {
+    starting = false
+  }
 }
 
 // ---------- Boot everything ----------
@@ -233,8 +286,20 @@ server.listen(PORT, async () => {
   console.log(`🌐 Server running on port ${PORT}`)
   await loadCommands()
   await loadObservers()
+  if (START_DELAY_MS > 0) {
+    console.log(`⏳ Waiting ${START_DELAY_MS / 1000}s so any older copy can shut down first...`)
+    await new Promise((r) => setTimeout(r, START_DELAY_MS))
+  }
   await startBot()
 })
+
+// Save the latest session when Render stops this copy during a deploy
+async function shutdown() {
+  try { await uploadSession() } catch {}
+  process.exit(0)
+}
+process.on('SIGTERM', shutdown)
+process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
