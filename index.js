@@ -132,7 +132,7 @@ async function startBot() {
     version,
     auth: state,
     logger,
-    browser: Browsers.macOS('Safari'),
+    browser: Browsers.ubuntu('Chrome'),
     printQRInTerminal: false,
     syncFullHistory: false,
     fireInitQueries: false,
@@ -225,4 +225,4 @@ server.listen(PORT, async () => {
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-    
+      
