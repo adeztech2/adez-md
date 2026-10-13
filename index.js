@@ -207,6 +207,12 @@ async function restoreSession(s) {
       fs.rmSync(s.dir, { recursive: true, force: true })
       fs.mkdirSync(s.dir, { recursive: true })
       new AdmZip(Buffer.from(data.data, 'base64')).extractAllTo(s.dir, true)
+      // Keep ONLY creds.json. Old encryption-key files in a saved copy are usually out of date,
+      // and stale keys are what make WhatsApp show "Waiting for this message".
+      // Fresh keys are created automatically on the next messages.
+      for (const f of fs.readdirSync(s.dir)) {
+        if (f !== 'creds.json') fs.rmSync(path.join(s.dir, f), { recursive: true, force: true })
+      }
       s.live = true
       console.log(`✅ [${s.id}] Session restored from Supabase`)
     } else {
@@ -222,8 +228,10 @@ async function uploadSession(s) {
     if (s.removed || s.status !== 'connected') return // never save half-finished logins
     if (!fs.existsSync(s.dir)) return
     await s.pendingSave
+    const credsFile = path.join(s.dir, 'creds.json')
+    if (!fs.existsSync(credsFile)) return
     const zip = new AdmZip()
-    zip.addLocalFolder(s.dir)
+    zip.addLocalFile(credsFile) // only the login, never the encryption keys
     const base64 = zip.toBuffer().toString('base64')
     const { error } = await supabase.from('bu_sessions').upsert({ id: s.id, data: base64 })
     if (error) throw error
@@ -374,19 +382,6 @@ async function startSession(s) {
         console.log(`✅ [${s.id}] ${BOT_NAME} connected! (${connectedCount()}/${sessions.size})`)
         if (s.isMain) startAutoBio(thisSock)
         uploadSession(s)
-
-        // Save whenever any key file changed (spread out so sessions do not zip all at once)
-        if (!s.syncInterval) {
-          s.syncInterval = setInterval(() => {
-            if (s.status !== 'connected') return
-            try {
-              const changed = fs
-                .readdirSync(s.dir)
-                .some((f) => fs.statSync(path.join(s.dir, f)).mtimeMs > s.lastSync)
-              if (changed) uploadSession(s)
-            } catch {}
-          }, SYNC_INTERVAL + Math.floor(Math.random() * 30000))
-        }
 
         // Connected alert, sent to the number the session is linked with
         if (!s.welcomeSent) {
@@ -547,4 +542,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-          
+        
