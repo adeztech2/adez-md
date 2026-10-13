@@ -30,7 +30,7 @@ const {
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
-import { loadSettings, getSetting } from './lib/settings.js'
+import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 
 // ---------- Quiet the encryption log spam ----------
@@ -281,6 +281,19 @@ async function removeSession(s, reason) {
   await clearSavedSession(s)
 }
 
+// Lets the restart command reconnect only the session that asked for it
+globalThis.__adez = {
+  restartSession(sock) {
+    for (const s of sessions.values()) {
+      if (s.sock === sock) {
+        scheduleStart(s, 500)
+        return true
+      }
+    }
+    return false
+  }
+}
+
 // ---------- Start one WhatsApp connection ----------
 async function startSession(s) {
   if (s.starting || s.removed) return
@@ -467,7 +480,9 @@ async function startSession(s) {
       if (type !== 'notify') return
       for (const m of messages) {
         try {
-          await handleMessage(thisSock, m)
+          // Run as this person so prefix, mode, banned list etc. are THEIR own settings
+          const who = String(thisSock.user?.id || '').split(':')[0].split('@')[0]
+          await runAs(who, () => handleMessage(thisSock, m))
         } catch (e) {
           console.log(`❌ [${s.id}] Message handler error:`, e.stack || e)
         }
@@ -532,4 +547,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-                                          
+          
