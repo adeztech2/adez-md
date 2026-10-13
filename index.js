@@ -69,7 +69,7 @@ const PORT = process.env.PORT || 3000
 const MAIN_ID = 'session'
 const SESSIONS_ROOT = path.resolve('./sessions')
 const OWNER_NUMBER = String(process.env.OWNER_NUMBER || '').replace(/\D/g, '') // owner's own number
-const CHANNEL_ON = process.env.CHANNEL_FOLLOW !== 'off' // auto-follow your channel (set CHANNEL_FOLLOW=off to stop)
+const CHANNEL_ON = !!(process.env.CHANNEL_LINK || process.env.CHANNEL_JID) // auto-follow your channel
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20) // includes the main session
 const STAGGER_MS = Number(process.env.STAGGER_MS || 4000) // gap between connections at startup
 const PAIR_TIMEOUT_MS = 3 * 60 * 1000 // give up if a new person does not finish pairing
@@ -547,4 +547,4 @@ process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
-process.on('uncaughtException', (e) => console.log('Uncaught 
+process.on('uncaughtException', (e) => console.log('Uncaught exception:', e
