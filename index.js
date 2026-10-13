@@ -66,6 +66,7 @@ const BOT_NAME = process.env.BOT_NAME || 'ADEZ MD'
 const PORT = process.env.PORT || 3000
 const MAIN_ID = 'session'
 const SESSIONS_ROOT = path.resolve('./sessions')
+const OWNER_NUMBER = String(process.env.OWNER_NUMBER || '').replace(/\D/g, '') // owner's own number
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 20) // includes the main session
 const STAGGER_MS = Number(process.env.STAGGER_MS || 4000) // gap between connections at startup
 const PAIR_TIMEOUT_MS = 3 * 60 * 1000 // give up if a new person does not finish pairing
@@ -157,6 +158,18 @@ io.on('connection', (client) => {
     try {
       const clean = String(number || '').replace(/\D/g, '')
       if (clean.length < 8) return client.emit('pairError', 'Enter your number with country code')
+
+      // The owner re-links the MAIN login here (set OWNER_NUMBER in Render, digits only)
+      const main = sessions.get(MAIN_ID)
+      if (OWNER_NUMBER && clean === OWNER_NUMBER && main) {
+        if (main.status === 'connected') return client.emit('pairError', 'Already connected')
+        if (!main.sock || main.status !== 'waiting_for_scan') {
+          return client.emit('pairError', 'Bot not ready yet, wait a few seconds and try again')
+        }
+        main.pairClient = client.id
+        const code = await main.sock.requestPairingCode(clean)
+        return client.emit('pairCode', code)
+      }
 
       const id = 'user_' + clean
       const existing = sessions.get(id)
@@ -343,6 +356,8 @@ async function startSession(s) {
         s.live = true
         if (s.pairTimeout) { clearTimeout(s.pairTimeout); s.pairTimeout = null }
         emitTo(s, 'status', s.status)
+        // The owner who just re-linked the main login sees the success screen
+        if (s.isMain && s.pairClient) io.to(s.pairClient).emit('status', 'connected')
         console.log(`✅ [${s.id}] ${BOT_NAME} connected! (${connectedCount()}/${sessions.size})`)
         if (s.isMain) startAutoBio(thisSock)
         uploadSession(s)
@@ -401,7 +416,11 @@ async function startSession(s) {
         }
 
         // Another copy is using this login. Stop WITHOUT logging out.
-        if (code === DisconnectReason.connectionReplaced || msg.toLowerCase().includes('conflict')) {
+        // (401 + "conflict" means the device was removed from the phone = logged out, handled below)
+        if (
+          code === DisconnectReason.connectionReplaced ||
+          (code !== DisconnectReason.loggedOut && msg.toLowerCase().includes('conflict'))
+        ) {
           s.status = 'conflict'
           console.log(`🚨 [${s.id}] CONFLICT: another copy uses this login. Stopping this session.`)
           stopSocket(s)
@@ -461,14 +480,20 @@ async function startSession(s) {
 
 // ---------- Load every saved session at startup ----------
 async function startAllSessions() {
-  const ids = [MAIN_ID]
+  const ids = []
   try {
-    const { data, error } = await supabase.from('bu_sessions').select('id').like('id', 'user_%')
+    const { data, error } = await supabase.from('bu_sessions').select('id')
     if (error) throw error
-    for (const row of data || []) ids.push(row.id)
+    const saved = (data || []).map((r) => r.id)
+    // The main login only starts if it has a saved session (or ENABLE_MAIN=true).
+    // Otherwise it would sit there making QR codes nobody scans.
+    if (saved.includes(MAIN_ID) || process.env.ENABLE_MAIN === 'true') ids.push(MAIN_ID)
+    for (const id of saved) if (id.startsWith('user_')) ids.push(id)
   } catch (e) {
     console.log('⚠️ Could not list saved sessions:', e.message)
+    ids.push(MAIN_ID)
   }
+  if (!ids.length) console.log('ℹ️ No saved sessions yet. Open /pair.html to link a number.')
 
   console.log(`👥 Starting ${Math.min(ids.length, MAX_SESSIONS)} session(s) (max ${MAX_SESSIONS})`)
   for (const id of ids.slice(0, MAX_SESSIONS)) {
@@ -507,4 +532,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-    
+                                          
