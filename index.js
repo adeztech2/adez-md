@@ -60,7 +60,6 @@ setInterval(() => {
 
 // ---------- Settings ----------
 const BOT_NAME = process.env.BOT_NAME || 'ADEZ MD'
-const OWNER_NUMBER = (process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 const PORT = process.env.PORT || 3000
 const SESSION_DIR = path.resolve('./session')
 const SESSION_ID = 'session'
@@ -267,9 +266,11 @@ async function startBot() {
           }, SYNC_INTERVAL)
         }
 
-        if (OWNER_NUMBER && !welcomeSent) {
+        // Connected alert: sent to the number the bot is linked with
+        if (!welcomeSent) {
           welcomeSent = true
           const prefix = process.env.PREFIX || '.'
+          const botJid = String(thisSock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
           const alert = box(`${BOT_NAME} LINKED`, [
             ['status', 'Connected successfully ✅'],
             ['owner', 'Arnold Adez'],
@@ -281,12 +282,12 @@ async function startBot() {
           const image = process.env.MENU_IMAGE
           try {
             await thisSock.sendMessage(
-              OWNER_NUMBER + '@s.whatsapp.net',
+              botJid,
               image ? { image: { url: image }, caption: alert } : { text: alert }
             )
           } catch {
             try {
-              await thisSock.sendMessage(OWNER_NUMBER + '@s.whatsapp.net', { text: alert })
+              await thisSock.sendMessage(botJid, { text: alert })
             } catch (e) {
               console.log('⚠️ Could not send confirmation:', e.message)
             }
