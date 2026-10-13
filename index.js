@@ -27,6 +27,8 @@ const {
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
+import { loadSettings } from './lib/settings.js'
+import { startAutoBio } from './lib/autobio.js'
 
 // ---------- Quiet the encryption log spam ----------
 // libsignal prints whole session objects (including private keys) to the logs.
@@ -250,6 +252,7 @@ async function startBot() {
         io.emit('status', botStatus)
         sessionWasLive = true
         console.log(`✅ ${BOT_NAME} connected!`)
+        startAutoBio(thisSock)
         uploadSession()
 
         // Encryption key files change on every message without a creds update,
@@ -374,6 +377,7 @@ server.listen(PORT, async () => {
   console.log(`🌐 Server running on port ${PORT}`)
   await loadCommands()
   await loadObservers()
+  await loadSettings()
   if (START_DELAY_MS > 0) {
     console.log(`⏳ Waiting ${START_DELAY_MS / 1000}s so any older copy can shut down first...`)
     await new Promise((r) => setTimeout(r, START_DELAY_MS))
