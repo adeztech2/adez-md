@@ -190,7 +190,7 @@ async function startBot() {
       if (code === DisconnectReason.timedOut && !everOpened) {
         console.log('🧹 Pairing timed out. Starting fresh (request a new code).')
         fs.rmSync(SESSION_DIR, { recursive: true, force: true })
-        restored = false
+        restored = true // do NOT download the old saved session again
         setTimeout(startBot, 3000)
         return
       }
@@ -238,4 +238,4 @@ server.listen(PORT, async () => {
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-            
+    
