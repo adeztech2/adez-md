@@ -1,4 +1,4 @@
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD+BOT;WhatsApp+Automation+System;Built+by+ADEZ+TECH;Nairobi%2C+Kenya+🇰🇪"/>
+  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD;WhatsApp+Automation+System;Built+by+ADEZ+TECH;Nairobi%2C+Kenya+🇰🇪"/>
 </h1>
 
 <p align="center">
@@ -10,6 +10,6 @@
 </p>
 
 <p align="center">
-  <b>ADEZ MD</b> is a powerful, AI-enhanced WhatsApp automation bot with 74+ commands across 7 categories — built on Baileys/Node.js and deployed on Railway. Crafted by <a href="https://adeztech.co.ke">ADEZ Tech</a> · Nairobi, Kenya.
+  <b>ADEZ MD</b> is a powerful, AI-enhanced WhatsApp automation bot with 74+ commands across 7 categories — built on Baileys/Node.js and deployed on Railway. Crafted by <a href="https://adeztech.co.ke">ADEZ TECH</a> · Nairobi, Kenya.
 </p>
 
