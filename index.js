@@ -11,12 +11,14 @@ import pino from 'pino'
 import QRCode from 'qrcode'
 import AdmZip from 'adm-zip'
 import { createClient } from '@supabase/supabase-js'
-import makeWASocket, {
+import baileys from '@whiskeysockets/baileys'
+const makeWASocket = baileys.default || baileys.makeWASocket || baileys
+const {
   useMultiFileAuthState,
   DisconnectReason,
   fetchLatestBaileysVersion,
   Browsers
-} from '@whiskeysockets/baileys'
+} = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 
 // ---------- Settings (read from .env or Render Environment Variables) ----------
@@ -223,4 +225,4 @@ server.listen(PORT, async () => {
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-  
+    
