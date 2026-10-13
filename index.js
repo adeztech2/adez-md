@@ -42,6 +42,7 @@ let botStatus = 'starting'
 let lastQR = null
 let restored = false
 let welcomeSent = false
+let everOpened = false
 
 // Health endpoint for UptimeRobot
 app.get('/', (req, res) => {
@@ -90,6 +91,8 @@ let lastSync = 0
 let syncTimer = null
 async function uploadSession() {
   try {
+    // Only save a login that really works (never a half-finished pairing)
+    if (botStatus !== 'connected') return
     if (!fs.existsSync(SESSION_DIR)) return
     const zip = new AdmZip()
     zip.addLocalFolder(SESSION_DIR)
@@ -159,6 +162,7 @@ async function startBot() {
     if (connection === 'open') {
       lastQR = null
       botStatus = 'connected'
+      everOpened = true
       io.emit('status', botStatus)
       console.log(`✅ ${BOT_NAME} connected!`)
       uploadSession()
@@ -181,6 +185,15 @@ async function startBot() {
       const code = err?.output?.statusCode
       const msg = String(err?.message || '')
       console.log(`❌ Connection closed. Code: ${code} | ${msg}`)
+
+      // Pairing timed out before login finished: throw away the half-finished login and start clean
+      if (code === DisconnectReason.timedOut && !everOpened) {
+        console.log('🧹 Pairing timed out. Starting fresh (request a new code).')
+        fs.rmSync(SESSION_DIR, { recursive: true, force: true })
+        restored = false
+        setTimeout(startBot, 3000)
+        return
+      }
 
       // Conflict = bot running twice somewhere. Kill this one.
       if (msg.toLowerCase().includes('conflict')) {
@@ -225,4 +238,4 @@ server.listen(PORT, async () => {
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-      
+            
