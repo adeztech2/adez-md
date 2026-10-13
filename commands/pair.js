@@ -2,7 +2,7 @@ import { box, botName } from '../lib/style.js'
 
 export const name = 'pair'
 export const category = 'general'
-export const aliases = ['link', 'getsession']
+export const aliases = ['getsession']
 export const description = 'Get the pairing page link'
 
 const PAIR_URL = 'https://arnoldadezbot.onrender.com/pair.html'
