@@ -32,6 +32,7 @@ import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
+import { registerCallGuard } from './lib/protect.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -332,6 +333,7 @@ async function startSession(s) {
     })
     s.sock = thisSock
     registerEvents(thisSock)
+    registerCallGuard(thisSock)
 
     thisSock.ev.on('creds.update', () => {
       s.pendingSave = s.pendingSave
@@ -542,4 +544,4 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-        
+                 
