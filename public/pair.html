@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ADEZ MD - Connect</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #0f172a; color: #fff; text-align: center; margin: 0; padding: 20px; }
+    .card { background: #1e293b; max-width: 380px; margin: 20px auto; padding: 20px; border-radius: 14px; }
+    h1 { margin-top: 0; }
+    #status { padding: 8px; border-radius: 8px; background: #334155; margin-bottom: 15px; }
+    #qr { width: 260px; height: 260px; background: #fff; border-radius: 10px; display: none; margin: 0 auto 10px; }
+    input { width: 90%; padding: 10px; border-radius: 8px; border: none; font-size: 16px; margin-bottom: 10px; }
+    button { padding: 10px 20px; border: none; border-radius: 8px; background: #22c55e; color: #fff; font-size: 16px; }
+    #code { font-size: 30px; letter-spacing: 4px; margin-top: 15px; font-weight: bold; color: #22c55e; }
+    #err { color: #f87171; margin-top: 10px; }
+    small { color: #94a3b8; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>ADEZ MD</h1>
+    <div id="status">Connecting to server...</div>
+
+    <h3>Option 1: Scan QR</h3>
+    <img id="qr" alt="QR code" />
+    <small>WhatsApp &gt; Linked Devices &gt; Link a Device</small>
+  </div>
+
+  <div class="card">
+    <h3>Option 2: Pair code</h3>
+    <input id="number" type="tel" placeholder="254111783552 (no + or spaces)" />
+    <br />
+    <button onclick="getCode()">Get pair code</button>
+    <div id="code"></div>
+    <div id="err"></div>
+    <small>WhatsApp &gt; Linked Devices &gt; Link with phone number</small>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script>
+    const socket = io();
+    const statusEl = document.getElementById('status');
+    const qrEl = document.getElementById('qr');
+    const codeEl = document.getElementById('code');
+    const errEl = document.getElementById('err');
+
+    socket.on('connect', () => { statusEl.textContent = 'Connected to server'; });
+    socket.on('disconnect', () => { statusEl.textContent = 'Server disconnected...'; });
+
+    socket.on('status', (s) => {
+      const names = {
+        starting: 'Bot is starting...',
+        waiting_for_scan: 'Waiting for you to scan',
+        connected: '✅ Bot is connected!',
+        disconnected: 'Reconnecting...'
+      };
+      statusEl.textContent = names[s] || s;
+      if (s === 'connected') qrEl.style.display = 'none';
+    });
+
+    socket.on('qr', (url) => { qrEl.src = url; qrEl.style.display = 'block'; });
+    socket.on('pairCode', (c) => { errEl.textContent = ''; codeEl.textContent = c; });
+    socket.on('pairError', (e) => { codeEl.textContent = ''; errEl.textContent = e; });
+
+    function getCode() {
+      errEl.textContent = '';
+      codeEl.textContent = '';
+      socket.emit('requestPair', document.getElementById('number').value);
+    }
+  </script>
+</body>
+</html>
