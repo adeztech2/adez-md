@@ -1,58 +1,56 @@
-const yts = require('yt-search');
-const axios = require('axios');
-const { sendStyled } = require('../../lib/menuLayout');
-const { getPrefix } = require('../../lib/botConfig');
+import yts from 'yt-search'
+import axios from 'axios'
 
-async function playCommand(sock, chatId, message) {
+export const name = 'play'
+export const category = 'download'
+export const aliases = ['music', 'song']
+export const description = 'Download a song by name'
+
+export async function run({ sock, from, m, args, prefix, reply }) {
+  const query = args.join(' ').trim()
+  if (!query) return reply(`Usage: ${prefix}play <song name>`)
+
+  try {
+    const { videos } = await yts(query)
+    if (!videos || videos.length === 0) return reply('No songs found.')
+
+    const video = videos[0]
+
+    let info = `┌▣ ◈ *MUSIC PLAYER* ◈\n`
+    info += `│ *TITLE* : ${video.title}\n`
+    info += `│ *ARTIST* : ${video.author?.name || 'Unknown'}\n`
+    info += `│ *DURATION* : ${video.timestamp}\n`
+    info += `│ *VIEWS* : ${video.views?.toLocaleString() || 'N/A'}\n`
+    info += `│ *UPLOADED* : ${video.ago || 'N/A'}\n`
+    info += `└▣\n\n`
+    info += `⏳ _Downloading, please wait..._`
+
     try {
-        const text = message.message?.conversation || message.message?.extendedTextMessage?.text || '';
-        const searchQuery = text.replace(/^[.\/\\!~#$%\-]+\S+\s*/, '').trim();
-
-        if (!searchQuery) {
-            await sendStyled(sock, chatId, message, {
-                title: 'MUSIC',
-                lines: [`Usage ☇ ${getPrefix()}music <song name>`]
-            });
-            return;
-        }
-
-        const { videos } = await yts(searchQuery);
-        if (!videos || videos.length === 0) {
-            await sendStyled(sock, chatId, message, {
-                title: 'MUSIC',
-                lines: ['No songs found.']
-            });
-            return;
-        }
-
-        await sendStyled(sock, chatId, message, {
-            title: 'MUSIC',
-            lines: [`Downloading ${videos[0].title}`]
-        });
-
-        const video = videos[0];
-        const response = await axios.get(`https://apis-keith.vercel.app/download/dlmp3?url=${video.url}`, { timeout: 60000 });
-        const data = response.data;
-        if (!data || !data.status || !data.result || !data.result.downloadUrl) {
-            await sendStyled(sock, chatId, message, {
-                title: 'MUSIC',
-                lines: ['Failed to fetch audio. Please try again later.']
-            });
-            return;
-        }
-
-        await sock.sendMessage(chatId, {
-            audio: { url: data.result.downloadUrl },
-            mimetype: 'audio/mpeg',
-            fileName: `${data.result.title || video.title}.mp3`
-        }, { quoted: message });
-    } catch (error) {
-        console.error('Error in play command:', error);
-        await sendStyled(sock, chatId, message, {
-            title: 'MUSIC',
-            lines: ['Download failed. Please try again later.']
-        });
+      await sock.sendMessage(from, { image: { url: video.thumbnail }, caption: info }, { quoted: m })
+    } catch {
+      await reply(info)
     }
-}
 
-module.exports = playCommand;
+    const res = await axios.get(
+      `https://apis-keith.vercel.app/download/dlmp3?url=${video.url}`,
+      { timeout: 60000 }
+    )
+    const data = res.data
+    if (!data?.status || !data?.result?.downloadUrl) {
+      return reply('Failed to fetch audio. Please try again later.')
+    }
+
+    await sock.sendMessage(
+      from,
+      {
+        audio: { url: data.result.downloadUrl },
+        mimetype: 'audio/mpeg',
+        fileName: `${data.result.title || video.title}.mp3`
+      },
+      { quoted: m }
+    )
+  } catch (e) {
+    console.log('Error in play command:', e)
+    await reply('Download failed. Please try again later.')
+  }
+}
