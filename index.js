@@ -25,6 +25,7 @@ const {
   Browsers
 } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
+import { registerEvents } from './lib/events.js' // NEW
 
 // ---------- Quiet the encryption log spam ----------
 // libsignal prints whole session objects (including private keys) to the logs.
@@ -222,6 +223,7 @@ async function startBot() {
       getMessage: async (key) => msgCache.get(key?.id)
     })
     sock = thisSock
+    registerEvents(thisSock) // NEW
 
     thisSock.ev.on('creds.update', () => {
       pendingSave = pendingSave
@@ -372,4 +374,3 @@ process.on('SIGINT', shutdown)
 
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
 process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
-          
