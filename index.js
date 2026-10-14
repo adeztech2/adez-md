@@ -444,7 +444,7 @@ async function startSession(s) {
             fs.rmSync(s.dir, { recursive: true, force: true })
             s.live = false
             s.restored = true
-            scheduleStart(s, 3000)
+            scheduleStart(s, 60000) // was 3000: slower retry saves memory while waiting for a scan
           } else {
             emitTo(s, 'pairError', 'Pairing did not finish. Try again.')
             await removeSession(s, 'pairing did not finish')
