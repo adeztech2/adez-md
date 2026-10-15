@@ -1,24 +1,34 @@
-import { box } from '../lib/style.js'
 import { getSetting, setSetting } from '../lib/settings.js'
+import { box } from '../lib/style.js'
 
 export const name = 'antibot'
 export const category = 'group'
-export const description = 'Delete messages from other bots: .antibot on/off'
+export const aliases = []
+export const description = 'Delete messages sent by other bots (on / off)'
 
-export async function run({ from, args, isGroup, isAdmin, isOwner, isBotAdmin, reply, prefix }) {
-  if (!isGroup) return reply(box('ANTIBOT', ['This command works in groups only.']))
-  if (!isAdmin && !isOwner) return reply(box('ANTIBOT', ['Only group admins can change this.']))
+export async function run({ args, reply, isGroup, isAdmin, isBotAdmin, isOwner, from, prefix }) {
+  if (!isGroup) return reply('This command works in groups only.')
+  if (!isAdmin && !isOwner) return reply('⛔ Admins only.')
 
-  const choice = (args[0] || '').toLowerCase()
-  const key = `antibot_${from}`
-  if (choice !== 'on' && choice !== 'off') {
-    return reply(box('ANTIBOT', [
-      ['status', getSetting(key) === 'on' ? 'ON ✅' : 'OFF ❌'],
-      `Use: ${prefix}antibot on  or  ${prefix}antibot off`
-    ]))
+  let map = {}
+  try { map = JSON.parse(getSetting('antibot') || '{}') } catch {}
+
+  const opt = (args[0] || '').toLowerCase()
+  if (!['on', 'off'].includes(opt)) {
+    return reply(
+      box('ANTI-BOT', [
+        ['this group', map[from] || 'off'],
+        `${prefix}antibot on - delete messages from other bots and warn`,
+        `${prefix}antibot off - turn off`
+      ])
+    )
   }
-  await setSetting(key, choice)
-  const rows = [['status', choice === 'on' ? 'ON ✅' : 'OFF ❌']]
-  if (choice === 'on' && !isBotAdmin) rows.push('Make me a group admin so I can delete messages.')
-  return reply(box('ANTIBOT', rows))
+
+  if (opt === 'off') delete map[from]
+  else map[from] = opt
+  await setSetting('antibot', JSON.stringify(map))
+
+  const rows = [['this group', opt]]
+  if (opt !== 'off' && !isBotAdmin) rows.push('⚠️ Make the bot an admin or this cannot work')
+  return reply(box('ANTI-BOT', rows))
 }
