@@ -1,5 +1,6 @@
 import os from 'os'
 import { getSetting } from '../lib/settings.js'
+import { box, noForward } from '../lib/style.js'
 
 export const name = 'menu2'
 export const category = 'Main'
@@ -51,31 +52,29 @@ export async function run({ sock, from, m, reply, prefix, getAllCommands }) {
   const speed = sent ? Math.max(0, Date.now() - sent) : 0
   const ram = ramBar()
 
-  let text = `┌▣ ◈ *${botName}* ◈\n`
-  text += `│ *OWNER* : Arnold Adez\n`
-  text += `│ *PREFIX* : [ ${prefix} ]\n`
-  text += `│ *HOST* : Render\n`
-  text += `│ *PLUGINS* : ${all.length}\n`
-  text += `│ *MODE* : ${cap(getSetting('mode') || 'public')}\n`
-  text += `│ *VERSION* : 1.0.0\n`
-  text += `│ *SPEED* : ${speed} ms\n`
-  text += `│ *USAGE* : ${ram.usage}\n`
-  text += `│ *RAM* : ${ram.text}\n`
-  text += `│ *UPTIME* : ${uptime()}\n`
-  text += `└▣\n`
+  const info = box(botName, [
+    ['owner', 'Arnold Adez'],
+    ['prefix', `[ ${prefix} ]`],
+    ['host', 'Render'],
+    ['plugins', all.length],
+    ['mode', cap(getSetting('mode') || 'public')],
+    ['version', '1.0.0'],
+    ['speed', `${speed} ms`],
+    ['usage', ram.usage],
+    ['ram', ram.text],
+    ['uptime', uptime()]
+  ])
 
-  for (const cat of sortedCats) {
-    text += `\n┌▣ ◈ *${cat.toUpperCase()} MENU* ◈\n`
-    for (const n of groups[cat].sort()) {
-      text += `│ ➽ ${n}\n`
-    }
-    text += `└▣\n`
-  }
+  const sections = sortedCats.map((cat) =>
+    box(`${cat.toUpperCase()} MENU`, groups[cat].sort())
+  )
+
+  const text = [info, ...sections].join('\n\n')
 
   const image = process.env.MENU_IMAGE
   if (image) {
     try {
-      await sock.sendMessage(from, { image: { url: image }, caption: text }, { quoted: m })
+      await sock.sendMessage(from, noForward({ image: { url: image }, caption: text }), { quoted: m })
       return
     } catch (e) {
       console.log('Menu image failed, sending text only:', e.message)
