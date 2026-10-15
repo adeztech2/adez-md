@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (v5: pair code + channel + new linked alert)
+//  ADEZ MD - index.js  (v6: pair code + channel + footer + linked alert)
 //  Logins are saved in Supabase table bu_sessions (id, data) as 'user_<number>'.
 //  Works with your existing lib/router.js, events.js, settings.js, autobio.js
 // ============================================================
@@ -21,12 +21,21 @@ const makeWASocket =
 const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
-import { box, styleTitle } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 import { autoFollowChannel, channelContext } from './lib/channel.js'
 import { getBotImage } from './lib/botimage.js'
 import { autoReact } from './lib/autoreact.js'
+
+// ---------- Footer added to every bot reply ----------
+const FOOTER = '> Powered by ADEZ TECH'
+
+// Adds the footer once to the end of any text or caption
+function addFooter(text) {
+  const t = String(text ?? '').trimEnd()
+  if (!t || t.endsWith(FOOTER)) return t
+  return `${t}\n\n${FOOTER}`
+}
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -86,13 +95,24 @@ function cacheMessage(s, m) {
   if (s.msgCache.size > 300) s.msgCache.delete(s.msgCache.keys().next().value)
 }
 
-// ---------- Forwarded-from-channel look on EVERY outgoing message ----------
+// ---------- Footer and channel tag on EVERY outgoing message ----------
 // Wraps sock.sendMessage once, so replies, images, audio, etc. from all
-// commands get the channel tag without editing each command or router.js.
+// commands get the footer and channel tag without editing each command or router.js.
 function applyChannelLook(sock) {
   const original = sock.sendMessage.bind(sock)
   sock.sendMessage = (jid, content, options) => {
     try {
+      const isChatMessage =
+        content && typeof content === 'object' &&
+        !content.react && !content.delete && !content.edit && !content.poll &&
+        content.disappearingMessagesInChat === undefined &&
+        jid !== 'status@broadcast'
+
+      if (isChatMessage) {
+        if (typeof content.text === 'string') content = { ...content, text: addFooter(content.text) }
+        if (typeof content.caption === 'string') content = { ...content, caption: addFooter(content.caption) }
+      }
+
       const skip =
         !content || typeof content !== 'object' ||
         String(jid).endsWith('@newsletter') || jid === 'status@broadcast' ||
@@ -105,7 +125,9 @@ function applyChannelLook(sock) {
           content = { ...content, contextInfo: { ...ctx, ...(content.contextInfo || {}) } }
         }
       }
-    } catch {}
+    } catch (e) {
+      console.log('Footer/channel wrapper error:', e.message)
+    }
     return original(jid, content, options)
   }
 }
@@ -309,29 +331,70 @@ async function startSession(s) {
 
         if (!s.welcomeSent) {
           s.welcomeSent = true
-          // Each number's own settings (this runs outside a message, so runAs is needed)
+          // This runs outside a message, so runAs makes it read this number's own prefix
           const prefix = runAs(s.number, () => getSetting('prefix')) ?? '.'
-          const mode = runAs(s.number, () => getSetting('mode')) || 'public'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
-          const alert =
-            `┌▣ ◈ ${styleTitle(`${BOT_NAME} LINKED`)} ◈\n` +
-            `│ *STATUS* : Connected ✅\n` +
-            `│ *NUMBER* : +${s.number}\n` +
-            `│ *OWNER* : ${OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'}\n` +
-            `│ *PREFIX* : ${prefix ? `[ ${prefix} ]` : 'none'}\n` +
-            `│ *MODE* : ${mode}\n` +
-            `│ *PLUGINS* : ${getAllCommands().length}\n` +
-            `│ *HOST* : Render\n` +
-            `│ *TIME* : ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })}\n` +
-            `└▣\n\n` +
-            `┌▣ ◈ ${styleTitle('GET STARTED')} ◈\n` +
-            `│ ➽ ${prefix}menu - categories\n` +
-            `│ ➽ ${prefix}menu2 - all commands\n` +
-            `│ ➽ ${prefix}ping - check speed\n` +
-            `└▣\n\n` +
-            `📢 Join our channel:\n` +
-            `https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m\n\n` +
-            `_Powered by ADEZ TECH_`
+          const alert = `╔══════════════════════════╗
+║  > ADEZ MD SYSTEM v3.0  ║
+║  > INITIALIZING...       ║
+╚══════════════════════════╝
+
+[✓] SYSTEM      : ONLINE
+[✓] ENGINE      : BAILEYS
+[✓] BOT         : ADEZ MD
+[✓] DEVELOPER   : ADEZ TECH
+[✓] OWNER       : ARNOLD ADEZ
+[✓] ACCESS      : PUBLIC
+
+┌──[ ROOT@ADEZ-MD ]
+└─$ ./commands --list
+
+╭──〔 SYSTEM COMMANDS 〕
+│
+├─$ ${prefix}menu
+├─$ ${prefix}alive
+├─$ ${prefix}ping
+├─$ ${prefix}owner
+├─$ ${prefix}repo
+╰────────────────────
+
+╭──〔 GROUP CONTROL 〕
+│
+├─$ ${prefix}kick
+├─$ ${prefix}promote
+├─$ ${prefix}demote
+├─$ ${prefix}tagall
+├─$ ${prefix}hidetag
+╰────────────────────
+
+╭──〔 MEDIA TOOLS 〕
+│
+├─$ ${prefix}sticker
+├─$ ${prefix}play
+├─$ ${prefix}video
+├─$ ${prefix}vv
+╰────────────────────
+
+╭──〔 WEB UTILITIES 〕
+│
+├─$ ${prefix}qr
+├─$ ${prefix}translate
+├─$ ${prefix}weather
+├─$ ${prefix}url
+╰────────────────────
+
+┌──[ SYSTEM INFORMATION ]
+│
+├─ BOT     : ADEZ MD
+├─ VERSION : 3.0
+├─ STATUS  : ACTIVE
+└─ DEVELOPER: ADEZ TECH
+
+> [ SYSTEM MESSAGE ]
+> ACCESS GRANTED ✓
+> WELCOME TO ADEZ MD
+
+[ POWERED BY ADEZ TECH ]`
           const image = getBotImage()
           try {
             await sock.sendMessage(jid, image ? { image, caption: alert } : { text: alert })
