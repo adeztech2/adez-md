@@ -1,6 +1,6 @@
 import os from 'os'
 import { getBotImage } from '../lib/botimage.js'
-import { styleTitle } from '../lib/style.js'
+import { box, noForward } from '../lib/style.js'
 import { getSetting } from '../lib/settings.js'
 
 export const name = 'menu'
@@ -60,11 +60,10 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
     if (!pick) {
       return reply(`❌ No category "${input}".\nUse ${prefix}menu to see the numbers.`)
     }
-    let text = `┌▣ ◈ ${styleTitle(`${ICONS[pick] || '📌'} ${pick.toUpperCase()} MENU`)} ◈\n`
-    for (const c of groups[pick].sort((a, b) => a.name.localeCompare(b.name))) {
-      text += `│ ➽ ${prefix}${c.name}\n`
-    }
-    text += `└▣\n\n_Back to categories: ${prefix}menu_`
+    const rows = groups[pick]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((c) => `${prefix}${c.name}`)
+    const text = box(`${ICONS[pick] || '📌'} ${pick.toUpperCase()} MENU`, rows) + `\n\n_Back to categories: ${prefix}menu_`
     return reply(text)
   }
 
@@ -74,30 +73,29 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
   const ram = ramBar()
   const mode = String(getSetting('mode') || 'public')
 
-  let text = `┌▣ ◈ ${styleTitle(botName)} ◈\n`
-  text += `│ *OWNER* : Arnold Adez\n`
-  text += `│ *PREFIX* : [ ${prefix} ]\n`
-  text += `│ *HOST* : Render\n`
-  text += `│ *PLUGINS* : ${all.length}\n`
-  text += `│ *MODE* : ${mode.charAt(0).toUpperCase() + mode.slice(1)}\n`
-  text += `│ *VERSION* : 1.0.0\n`
-  text += `│ *SPEED* : ${speed} ms\n`
-  text += `│ *USAGE* : ${ram.usage}\n`
-  text += `│ *RAM* : ${ram.text}\n`
-  text += `│ *UPTIME* : ${uptime()}\n`
-  text += `└▣\n`
+  const info = box(botName, [
+    ['owner', 'Arnold Adez'],
+    ['prefix', `[ ${prefix} ]`],
+    ['host', 'Render'],
+    ['plugins', all.length],
+    ['mode', mode.charAt(0).toUpperCase() + mode.slice(1)],
+    ['version', '1.0.0'],
+    ['speed', `${speed} ms`],
+    ['usage', ram.usage],
+    ['ram', ram.text],
+    ['uptime', uptime()]
+  ])
 
-  text += `\n┌▣ ◈ ${styleTitle('CATEGORIES')} ◈\n`
-  cats.forEach((cat, i) => {
-    text += `│ *${i + 1}.* ${ICONS[cat] || '📌'} ${cat.toUpperCase()} (${groups[cat].length})\n`
-  })
-  text += `└▣\n`
-  text += `\n_Reply to this message with a number (e.g. 1) to open that category_\n_Full list: ${prefix}menu2_`
+  const catList = cats.map((cat, i) => `${i + 1}. ${ICONS[cat] || '📌'} ${cat.toUpperCase()} (${groups[cat].length})`)
+  const categories = box('CATEGORIES', catList)
+
+  let text = `${info}\n\n${categories}`
+  text += `\n\n_Reply to this message with a number (e.g. 1) to open that category_\n_Full list: ${prefix}menu2_`
 
   const image = getBotImage()
   if (image) {
     try {
-      await sock.sendMessage(from, { image, caption: text }, { quoted: m })
+      await sock.sendMessage(from, noForward({ image, caption: text }), { quoted: m })
       return
     } catch (e) {
       console.log('Menu image failed, sending text only:', e.message)
