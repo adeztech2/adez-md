@@ -1,6 +1,7 @@
 import os from 'os'
 import { getBotImage } from '../lib/botimage.js'
 import { styleTitle } from '../lib/style.js'
+import { getSetting } from '../lib/settings.js'
 
 export const name = 'menu'
 export const category = 'Main'
@@ -11,6 +12,10 @@ const ICONS = {
   ai: '🤖', download: '📥', fun: '🎉', general: '⚡', group: '👥',
   media: '🎞️', owner: '👑', tools: '🛠️', main: '🏠'
 }
+
+// Order of the categories (this sets the numbers 1, 2, 3...).
+// Any new category you add later goes after these, A to Z.
+const ORDER = ['general', 'download', 'ai', 'tools', 'fun', 'media', 'group', 'owner', 'main']
 
 function uptime() {
   const s = Math.floor(process.uptime())
@@ -40,7 +45,12 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
     if (!groups[cat]) groups[cat] = []
     groups[cat].push(cmd)
   }
-  const cats = Object.keys(groups).sort() // same order every time = stable numbers
+  // Same order every time = stable numbers
+  const rank = (c) => {
+    const i = ORDER.indexOf(c)
+    return i === -1 ? ORDER.length : i
+  }
+  const cats = Object.keys(groups).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
 
   const input = (args?.[0] || '').toLowerCase()
 
@@ -62,13 +72,14 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
   const sent = Number(m?.messageTimestamp || 0) * 1000
   const speed = sent ? Math.max(0, Date.now() - sent) : 0
   const ram = ramBar()
+  const mode = String(getSetting('mode') || 'public')
 
   let text = `┌▣ ◈ ${styleTitle(botName)} ◈\n`
   text += `│ *OWNER* : Arnold Adez\n`
   text += `│ *PREFIX* : [ ${prefix} ]\n`
   text += `│ *HOST* : Render\n`
   text += `│ *PLUGINS* : ${all.length}\n`
-  text += `│ *MODE* : Public\n`
+  text += `│ *MODE* : ${mode.charAt(0).toUpperCase() + mode.slice(1)}\n`
   text += `│ *VERSION* : 1.0.0\n`
   text += `│ *SPEED* : ${speed} ms\n`
   text += `│ *USAGE* : ${ram.usage}\n`
