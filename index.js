@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (v5: pair code + channel + new linked alert)
+//  ADEZ MD - index.js  (v3: every number links with a pair code)
 //  Logins are saved in Supabase table bu_sessions (id, data) as 'user_<number>'.
 //  Works with your existing lib/router.js, events.js, settings.js, autobio.js
 // ============================================================
@@ -21,12 +21,9 @@ const makeWASocket =
 const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
-import { box, styleTitle } from './lib/style.js'
+import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
-import { autoFollowChannel, channelContext } from './lib/channel.js'
-import { getBotImage } from './lib/botimage.js'
-import { autoReact } from './lib/autoreact.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -66,7 +63,11 @@ const io = new Server(server)
 const sessions = new Map() // id -> state
 
 const connectedCount = () => [...sessions.values()].filter((s) => s.status === 'connected').length
-const emitTo = (s, event, payload) => { if (s.pairClient) io.to(s.pairClient).emit(event, payload) }
+const emitTo = (s, event, payload) => {
+  if (event === 'pairCode') s.onCode?.(payload) // used by the .pair command
+  if (event === 'pairError') s.onError?.(payload)
+  if (s.pairClient) io.to(s.pairClient).emit(event, payload)
+}
 
 function makeState(id, opts = {}) {
   return {
@@ -84,49 +85,6 @@ function cacheMessage(s, m) {
   if (!m?.key?.id || !m.message) return
   s.msgCache.set(m.key.id, m.message)
   if (s.msgCache.size > 300) s.msgCache.delete(s.msgCache.keys().next().value)
-}
-
-// ---------- Forwarded-from-channel look on EVERY outgoing message ----------
-// Wraps sock.sendMessage once, so replies, images, audio, etc. from all
-// commands get the channel tag without editing each command or router.js.
-function applyChannelLook(sock) {
-  const original = sock.sendMessage.bind(sock)
-  sock.sendMessage = (jid, content, options) => {
-    try {
-      const skip =
-        !content || typeof content !== 'object' ||
-        String(jid).endsWith('@newsletter') || jid === 'status@broadcast' ||
-        content.react || content.delete || content.edit || content.forward ||
-        content.poll || content.disappearingMessagesInChat !== undefined ||
-        content.contextInfo?.forwardedNewsletterMessageInfo
-      if (!skip) {
-        const ctx = channelContext()
-        if (Object.keys(ctx).length) {
-          content = { ...content, contextInfo: { ...ctx, ...(content.contextInfo || {}) } }
-        }
-      }
-    } catch {}
-    return original(jid, content, options)
-  }
-}
-
-// ---------- Reply with a number to the menu -> open that category ----------
-// If someone replies "1" to the bot's numbered menu, turn it into ".menu 1"
-// (or "menu 1" when the prefix is set to none)
-function rewriteMenuReply(m) {
-  try {
-    const msg = m?.message
-    if (!msg) return
-    const text = (msg.extendedTextMessage?.text || msg.conversation || '').trim()
-    if (!/^\d{1,2}$/.test(text)) return
-    const quoted = msg.extendedTextMessage?.contextInfo?.quotedMessage
-    if (!quoted) return
-    const quotedText =
-      quoted.conversation || quoted.extendedTextMessage?.text || quoted.imageMessage?.caption || ''
-    if (!quotedText.includes('CATEGORIES')) return
-    const prefix = getSetting('prefix') ?? ''
-    m.message = { conversation: `${prefix}menu ${text}` }
-  } catch {}
 }
 
 // ---------- Web ----------
@@ -254,7 +212,6 @@ async function startSession(s) {
       getMessage: async (key) => s.msgCache.get(key?.id)
     })
     s.sock = sock
-    applyChannelLook(sock)
     registerEvents(sock)
 
     sock.ev.on('creds.update', () => {
@@ -294,9 +251,6 @@ async function startSession(s) {
         if (OWNER_NUMBER && s.number === OWNER_NUMBER) startAutoBio(sock)
         uploadSession(s)
 
-        // Resolve channel JID (for forwarded look) and follow the channel once
-        autoFollowChannel(sock).catch((e) => console.log(`⚠️ [${s.id}] channel:`, e.message))
-
         if (!s.syncInterval) {
           s.syncInterval = setInterval(() => {
             if (s.status !== 'connected') return
@@ -309,32 +263,18 @@ async function startSession(s) {
 
         if (!s.welcomeSent) {
           s.welcomeSent = true
-          // Each number's own settings (this runs outside a message, so runAs is needed)
-          const prefix = runAs(s.number, () => getSetting('prefix')) ?? '.'
-          const mode = runAs(s.number, () => getSetting('mode')) || 'public'
+          const prefix = getSetting('prefix') || '.'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
-          const alert =
-            `┌▣ ◈ ${styleTitle(`${BOT_NAME} LINKED`)} ◈\n` +
-            `│ *STATUS* : Connected ✅\n` +
-            `│ *NUMBER* : +${s.number}\n` +
-            `│ *OWNER* : ${OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'}\n` +
-            `│ *PREFIX* : ${prefix ? `[ ${prefix} ]` : 'none'}\n` +
-            `│ *MODE* : ${mode}\n` +
-            `│ *PLUGINS* : ${getAllCommands().length}\n` +
-            `│ *HOST* : Render\n` +
-            `│ *TIME* : ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })}\n` +
-            `└▣\n\n` +
-            `┌▣ ◈ ${styleTitle('GET STARTED')} ◈\n` +
-            `│ ➽ ${prefix}menu - categories\n` +
-            `│ ➽ ${prefix}menu2 - all commands\n` +
-            `│ ➽ ${prefix}ping - check speed\n` +
-            `└▣\n\n` +
-            `📢 Join our channel:\n` +
-            `https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m\n\n` +
-            `_Powered by ADEZ TECH_`
-          const image = getBotImage()
+          const alert = box(`${BOT_NAME} LINKED`, [
+            ['status', 'Connected successfully ✅'],
+            ['owner', OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'],
+            ['prefix', `[ ${prefix} ]`],
+            ['plugins', getAllCommands().length],
+            ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
+          ]) + `\n\n_Type ${prefix}menu to see all commands_`
+          const image = process.env.MENU_IMAGE
           try {
-            await sock.sendMessage(jid, image ? { image, caption: alert } : { text: alert })
+            await sock.sendMessage(jid, image ? { image: { url: image }, caption: alert } : { text: alert })
           } catch {
             try { await sock.sendMessage(jid, { text: alert }) } catch (e) { console.log(`⚠️ [${s.id}] welcome failed:`, e.message) }
           }
@@ -373,7 +313,7 @@ async function startSession(s) {
       for (const m of messages) cacheMessage(s, m)
       if (type !== 'notify') return
       for (const m of messages) {
-        try { await runAs(s.number, () => { autoReact(sock, m, getAllCommands).catch(() => {}); rewriteMenuReply(m); return handleMessage(sock, m) }) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
+        try { await runAs(s.number, () => handleMessage(sock, m)) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
       }
     })
   } finally {
@@ -398,6 +338,33 @@ async function startAllSessions() {
     await sleep(STAGGER_MS)
   }
 }
+
+// ---------- Pairing from a WhatsApp chat (used by the .pair command) ----------
+function pairFromChat(number) {
+  return new Promise(async (resolve, reject) => {
+    const clean = String(number || '').replace(/\D/g, '')
+    if (clean.length < 8) return reject(new Error('Enter the number with country code'))
+    const id = 'user_' + clean
+    const existing = sessions.get(id)
+    if (existing) {
+      return reject(new Error(existing.status === 'connected'
+        ? 'This number is already connected'
+        : 'Pairing for this number is already in progress, wait 3 minutes'))
+    }
+    if (sessions.size >= MAX_SESSIONS) return reject(new Error('Bot is full right now. Contact the owner.'))
+
+    const s = makeState(id, { skipRestore: true, pairNumber: clean })
+    s.onCode = resolve
+    s.onError = (msg) => reject(new Error(msg))
+    fs.rmSync(s.dir, { recursive: true, force: true })
+    sessions.set(id, s)
+    s.pairTimeout = setTimeout(() => {
+      if (s.status !== 'connected' && !s.removed) removeSession(s, 'pairing timed out')
+    }, PAIR_TIMEOUT_MS)
+    try { await startSession(s) } catch (e) { reject(e) }
+  })
+}
+globalThis.adezPair = pairFromChat
 
 server.listen(PORT, async () => {
   console.log(`🌐 Server running on port ${PORT}`)
