@@ -26,6 +26,7 @@ import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 import { autoFollowChannel, channelContext } from './lib/channel.js'
 import { getBotImage } from './lib/botimage.js'
+import { autoReact } from './lib/autoreact.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -369,7 +370,7 @@ async function startSession(s) {
       for (const m of messages) cacheMessage(s, m)
       if (type !== 'notify') return
       for (const m of messages) {
-        try { await runAs(s.number, () => { rewriteMenuReply(m); return handleMessage(sock, m) }) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
+        try { await runAs(s.number, () => { autoReact(sock, m, getAllCommands).catch(() => {}); rewriteMenuReply(m); return handleMessage(sock, m) }) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
       }
     })
   } finally {
