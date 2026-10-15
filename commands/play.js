@@ -24,7 +24,9 @@ async function ytdlp(args, timeout = 180000) {
 export async function run({ sock, from, m, args, reply, prefix }) {
   const query = (args || []).join(' ').trim()
   if (!query) {
-    return reply(`Usage: ${prefix}play <song name or YouTube link>`)
+    return reply(box('PLAY', [
+      ['usage', `${prefix}play <song name or link>`]
+    ]))
   }
 
   const target = isUrl(query) ? query : `ytsearch1:${query}`
@@ -36,14 +38,20 @@ export async function run({ sock, from, m, args, reply, prefix }) {
     const info = JSON.parse(stdout.trim().split('\n')[0])
 
     if (info.duration && info.duration > MAX_SECONDS) {
-      return reply(`❌ That track is longer than ${MAX_SECONDS / 60} minutes.`)
+      return reply(box('PLAY', [
+        ['status', `Track is longer than ${MAX_SECONDS / 60} minutes ❌`]
+      ]))
     }
 
-    const mins = info.duration ? `${Math.floor(info.duration / 60)}:${String(info.duration % 60).padStart(2, '0')}` : 'unknown'
+    const mins = info.duration
+      ? `${Math.floor(info.duration / 60)}:${String(info.duration % 60).padStart(2, '0')}`
+      : 'unknown'
+
     await reply(box('PLAYING', [
       ['title', info.title],
       ['channel', info.uploader || 'unknown'],
-      ['duration', mins]
+      ['duration', mins],
+      ['status', 'Downloading... ⏳']
     ]))
 
     // 2. Download the audio into a temp folder
@@ -68,7 +76,11 @@ export async function run({ sock, from, m, args, reply, prefix }) {
     }), { quoted: m })
   } catch (e) {
     console.log('Play failed:', e.message)
-    await reply(`❌ Could not play that. ${e.message.includes('max-filesize') || e.message.includes('larger') ? 'The file is too large.' : 'Try another search or link.'}`)
+    const tooLarge = e.message.includes('max-filesize') || e.message.includes('larger')
+    await reply(box('PLAY', [
+      ['status', tooLarge ? 'File is too large ❌' : 'Could not play that ❌'],
+      ['tip', 'Try another search or link']
+    ]))
   } finally {
     if (dir) fs.rmSync(dir, { recursive: true, force: true })
   }
