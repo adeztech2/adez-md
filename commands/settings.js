@@ -8,7 +8,13 @@ export const description = 'View or change bot settings'
 const RULES = {
   mode: ['public', 'private'],
   autoreact: ['on', 'off'],
-  botname: null // any text
+  botname: null, // any text
+  chatbot: ['on', 'off'],
+  anticall: ['on', 'off'],
+  antidelete: ['on', 'chat', 'off'],
+  autobio: ['on', 'off'],
+  antilink: ['on', 'off'],
+  antibot: ['on', 'off']
 }
 
 export async function run({ args, prefix, isOwner, reply }) {
@@ -25,6 +31,7 @@ export async function run({ args, prefix, isOwner, reply }) {
     text += `_Change one:_\n`
     text += `${prefix}settings mode private\n`
     text += `${prefix}settings autoreact off\n`
+    text += `${prefix}settings chatbot on\n`
     text += `${prefix}settings botname MY BOT`
     return reply(text)
   }
