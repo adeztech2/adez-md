@@ -11,14 +11,40 @@ export const name = 'play'
 export const category = 'download'
 export const description = 'Search YouTube and send the audio (play <song name or link>)'
 
-const YTDLP = process.env.YTDLP_PATH || 'yt-dlp'
 const MAX_SECONDS = 10 * 60   // skip anything longer than 10 minutes
 const MAX_BYTES = '16M'       // WhatsApp audio limit is roughly this size
+const BINARY_URL = 'https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux'
 
 const isUrl = (s) => /^https?:\/\//i.test(s) || /youtu\.?be/i.test(s)
 
+let ytdlpPath = null
+
+// Finds a working yt-dlp. If none is installed, downloads the standalone binary once.
+async function findYtdlp() {
+  if (ytdlpPath) return ytdlpPath
+
+  for (const candidate of [process.env.YTDLP_PATH, 'yt-dlp'].filter(Boolean)) {
+    try {
+      await execFileAsync(candidate, ['--version'], { timeout: 15000 })
+      ytdlpPath = candidate
+      return candidate
+    } catch {}
+  }
+
+  const dest = path.join(os.tmpdir(), 'yt-dlp')
+  if (!fs.existsSync(dest)) {
+    const res = await fetch(BINARY_URL)
+    if (!res.ok) throw new Error(`could not download yt-dlp (HTTP ${res.status})`)
+    fs.writeFileSync(dest, Buffer.from(await res.arrayBuffer()), { mode: 0o755 })
+    console.log('yt-dlp downloaded to', dest)
+  }
+  ytdlpPath = dest
+  return dest
+}
+
 async function ytdlp(args, timeout = 180000) {
-  return execFileAsync(YTDLP, args, { timeout, maxBuffer: 10 * 1024 * 1024 })
+  const bin = await findYtdlp()
+  return execFileAsync(bin, args, { timeout, maxBuffer: 10 * 1024 * 1024 })
 }
 
 export async function run({ sock, from, m, args, reply, prefix }) {
