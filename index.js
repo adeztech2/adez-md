@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (v4: pair code + channel follow + forwarded look)
+//  ADEZ MD - index.js  (v5: pair code + channel + new linked alert)
 //  Logins are saved in Supabase table bu_sessions (id, data) as 'user_<number>'.
 //  Works with your existing lib/router.js, events.js, settings.js, autobio.js
 // ============================================================
@@ -290,13 +290,25 @@ async function startSession(s) {
           s.welcomeSent = true
           const prefix = getSetting('prefix') || '.'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
-          const alert = box(`${BOT_NAME} LINKED`, [
-            ['status', 'Connected successfully ✅'],
-            ['owner', OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'],
-            ['prefix', `[ ${prefix} ]`],
-            ['plugins', getAllCommands().length],
-            ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
-          ]) + `\n\n_Type ${prefix}menu to see all commands_`
+          const alert =
+            `┌▣ ◈ *${BOT_NAME} LINKED* ◈\n` +
+            `│ *STATUS* : Connected ✅\n` +
+            `│ *NUMBER* : +${s.number}\n` +
+            `│ *OWNER* : ${OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'}\n` +
+            `│ *PREFIX* : [ ${prefix} ]\n` +
+            `│ *MODE* : ${getSetting('mode') || 'public'}\n` +
+            `│ *PLUGINS* : ${getAllCommands().length}\n` +
+            `│ *HOST* : Render\n` +
+            `│ *TIME* : ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })}\n` +
+            `└▣\n\n` +
+            `┌▣ ◈ *GET STARTED* ◈\n` +
+            `│ ➽ ${prefix}menu - categories\n` +
+            `│ ➽ ${prefix}menu2 - all commands\n` +
+            `│ ➽ ${prefix}ping - check speed\n` +
+            `└▣\n\n` +
+            `📢 Join our channel:\n` +
+            `https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m\n\n` +
+            `_Powered by ADEZ TECH_`
           const image = process.env.MENU_IMAGE
           try {
             await sock.sendMessage(jid, image ? { image: { url: image }, caption: alert } : { text: alert })
