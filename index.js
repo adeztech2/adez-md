@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (v3: every number links with a pair code)
+//  ADEZ MD - index.js  (v4: pair code + channel follow + forwarded look)
 //  Logins are saved in Supabase table bu_sessions (id, data) as 'user_<number>'.
 //  Works with your existing lib/router.js, events.js, settings.js, autobio.js
 // ============================================================
@@ -24,6 +24,7 @@ import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
+import { autoFollowChannel, channelContext } from './lib/channel.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -81,6 +82,30 @@ function cacheMessage(s, m) {
   if (!m?.key?.id || !m.message) return
   s.msgCache.set(m.key.id, m.message)
   if (s.msgCache.size > 300) s.msgCache.delete(s.msgCache.keys().next().value)
+}
+
+// ---------- Forwarded-from-channel look on EVERY outgoing message ----------
+// Wraps sock.sendMessage once, so replies, images, audio, etc. from all
+// commands get the channel tag without editing each command or router.js.
+function applyChannelLook(sock) {
+  const original = sock.sendMessage.bind(sock)
+  sock.sendMessage = (jid, content, options) => {
+    try {
+      const skip =
+        !content || typeof content !== 'object' ||
+        String(jid).endsWith('@newsletter') || jid === 'status@broadcast' ||
+        content.react || content.delete || content.edit || content.forward ||
+        content.poll || content.disappearingMessagesInChat !== undefined ||
+        content.contextInfo?.forwardedNewsletterMessageInfo
+      if (!skip) {
+        const ctx = channelContext()
+        if (Object.keys(ctx).length) {
+          content = { ...content, contextInfo: { ...ctx, ...(content.contextInfo || {}) } }
+        }
+      }
+    } catch {}
+    return original(jid, content, options)
+  }
 }
 
 // ---------- Web ----------
@@ -208,6 +233,7 @@ async function startSession(s) {
       getMessage: async (key) => s.msgCache.get(key?.id)
     })
     s.sock = sock
+    applyChannelLook(sock)
     registerEvents(sock)
 
     sock.ev.on('creds.update', () => {
@@ -246,6 +272,9 @@ async function startSession(s) {
         console.log(`✅ [${s.id}] ${BOT_NAME} connected! (${connectedCount()}/${sessions.size})`)
         if (OWNER_NUMBER && s.number === OWNER_NUMBER) startAutoBio(sock)
         uploadSession(s)
+
+        // Resolve channel JID (for forwarded look) and follow the channel once
+        autoFollowChannel(sock).catch((e) => console.log(`⚠️ [${s.id}] channel:`, e.message))
 
         if (!s.syncInterval) {
           s.syncInterval = setInterval(() => {
