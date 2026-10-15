@@ -5,24 +5,28 @@ import { box } from '../lib/style.js'
 export const name = 'play'
 export const category = 'download'
 export const aliases = ['music', 'song']
-export const description = 'Download a song by name'
+export const description = 'Download a song by name or YouTube link'
 
 // Free download APIs, tried in order until one gives a real audio file.
-// These public APIs come and go. To add your own, set PLAY_API in Render to a link
-// that ends with "url=" (for example https://your-api.com/mp3?url=) and it is tried first.
+// These public APIs come and go. To add your own, set PLAY_API in Render to one or more
+// links (separated by commas) that end with "url=", for example https://your-api.com/mp3?url=
+// They are tried first.
 const SOURCES = [
-  process.env.PLAY_API,
+  ...String(process.env.PLAY_API || '').split(',').map((s) => s.trim()).filter(Boolean),
   'https://apis-keith.vercel.app/download/dlmp3?url=',
   'https://api.giftedtech.co.ke/api/download/ytmp3?apikey=gifted&url=',
-  'https://api.siputzx.my.id/api/d/ytmp3?url='
-].filter(Boolean)
+  'https://api.siputzx.my.id/api/d/ytmp3?url=',
+  'https://api.ryzendesu.vip/api/downloader/ytmp3?url=',
+  'https://api.agatz.xyz/api/ytmp3?url='
+]
 
 const MAX_SECONDS = 20 * 60 // skip very long videos
 const KEYS = ['downloadUrl', 'download_url', 'dl', 'link', 'download', 'url']
+const YT_LINK = /^https?:\/\/(www\.|m\.|music\.)?(youtube\.com|youtu\.be)\//i
 
 // Different APIs name the download link differently, so look for it by several names
 function search(obj, key, depth = 0) {
-  if (!obj || typeof obj !== 'object' || depth > 4) return null
+  if (!obj || typeof obj !== 'object' || depth > 5) return null
   const v = obj[key]
   if (typeof v === 'string' && /^https?:\/\//.test(v) && !/youtu\.?be/.test(v)) return v
   for (const child of Object.values(obj)) {
@@ -66,58 +70,76 @@ function detectType(buf) {
 
 async function getAudio(videoUrl) {
   for (let i = 0; i < SOURCES.length; i++) {
+    const host = SOURCES[i].split('/')[2]
     try {
-      const res = await axios.get(SOURCES[i] + encodeURIComponent(videoUrl), { timeout: 60000 })
+      const res = await axios.get(SOURCES[i] + encodeURIComponent(videoUrl), { timeout: 30000 })
       const link = findLink(res.data)
       if (!link) throw new Error('no download link in reply')
-      return await fetchAudio(link)
+      const buf = await fetchAudio(link)
+      console.log(`✅ play: source ${i + 1} (${host}) worked`)
+      return buf
     } catch (e) {
-      console.log(`⚠️ play: source ${i + 1} failed: ${e.message}`)
+      console.log(`⚠️ play: source ${i + 1} (${host}) failed: ${e.message}`)
     }
   }
   return null
 }
 
+async function findVideo(query) {
+  if (YT_LINK.test(query)) {
+    const id = (query.match(/(?:v=|youtu\.be\/|shorts\/)([\w-]{11})/) || [])[1]
+    if (id) {
+      try { return await yts({ videoId: id }) } catch {}
+    }
+  }
+  const { videos } = await yts(query)
+  return videos?.[0] || null
+}
+
 export async function run({ sock, from, m, args, prefix, reply }) {
   const query = args.join(' ').trim()
-  if (!query) return reply(`Usage: ${prefix}play <song name>`)
+  if (!query) return reply(box('MUSIC PLAYER', [`Use: ${prefix}play <song name or YouTube link>`]))
 
   try {
-    const { videos } = await yts(query)
-    if (!videos || videos.length === 0) return reply('No songs found.')
-
-    const video = videos[0]
+    const video = await findVideo(query)
+    if (!video) return reply(box('MUSIC PLAYER', ['No songs found.']))
     if (video.seconds && video.seconds > MAX_SECONDS) {
-      return reply('That video is too long. Try a shorter song.')
+      return reply(box('MUSIC PLAYER', ['That video is too long. Try a shorter song.']))
     }
 
     const info =
       box('MUSIC PLAYER', [
         ['title', video.title],
         ['artist', video.author?.name || 'Unknown'],
-        ['duration', video.timestamp],
+        ['duration', video.timestamp || 'N/A'],
         ['views', video.views?.toLocaleString() || 'N/A'],
         ['uploaded', video.ago || 'N/A']
       ]) + `\n\n⏳ _Downloading, please wait..._`
 
     try {
-      await sock.sendMessage(from, { image: { url: video.thumbnail }, caption: info }, { quoted: m })
+      await sock.sendMessage(from, { image: { url: video.thumbnail || video.image }, caption: info }, { quoted: m })
     } catch {
       await reply(info)
     }
 
     const buf = await getAudio(video.url)
-    if (!buf) return reply('❌ Could not get the audio right now. Please try again later.')
+    if (!buf) {
+      return reply(box('MUSIC PLAYER', [
+        'Could not get the audio right now.',
+        'The free download services may be down. Please try again later.'
+      ]))
+    }
 
     const { mimetype, ext } = detectType(buf)
     const safeTitle = video.title.replace(/[\\/:*?"<>|]/g, '').slice(0, 80) || 'song'
-    await sock.sendMessage(
-      from,
-      { audio: buf, mimetype, fileName: `${safeTitle}.${ext}` },
-      { quoted: m }
-    )
+    try {
+      await sock.sendMessage(from, { audio: buf, mimetype, fileName: `${safeTitle}.${ext}` }, { quoted: m })
+    } catch (e) {
+      console.log('play: audio send failed, sending as a file:', e.message)
+      await sock.sendMessage(from, { document: buf, mimetype, fileName: `${safeTitle}.${ext}` }, { quoted: m })
+    }
   } catch (e) {
     console.log('Error in play command:', e)
-    await reply('Download failed. Please try again later.')
+    await reply(box('MUSIC PLAYER', ['Download failed. Please try again later.']))
   }
-          }
+}
