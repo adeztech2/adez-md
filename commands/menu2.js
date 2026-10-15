@@ -1,8 +1,8 @@
 import os from 'os'
 
-export const name = 'menu'
+export const name = 'menu2'
 export const category = 'Main'
-export const aliases = ['help', 'commands']
+export const aliases = ['fullmenu', 'allmenu']
 export const description = 'Shows all commands'
 
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase()
