@@ -1,4 +1,5 @@
-  <img src="https://readme-typing-svg.herokuapp.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD+BOT;WhatsApp+Automation+System;Built+by+ARNOLD+ADEZ; OYUGIS%2C+KENYA+🇰🇪"/>
+<h1 align="center">
+  <img src="https://readme-typing-svg.demolab.com?font=Orbitron&size=40&duration=3000&pause=1000&color=00E5FF&center=true&vCenter=true&width=700&lines=⚡+ADEZ-MD+BOT;WhatsApp+Automation+System;Built+by+ARNOLD+ADEZ;OYUGIS%2C+KENYA+🇰🇪"/>
 </h1>
 
 <p align="center">
@@ -10,5 +11,5 @@
 </p>
 
 <p align="center">
-  <b>ADEZ-MD</b> is a powerful, AI-enhanced WhatsApp automation bot with 74+ commands across 7 categories — built on Baileys/Node.js and deployed on Railway. Crafted by <a href="https://arnoldadezbot.onrender.com/pair.html">TAP HERE TO PAIR</a> · Nairobi, Kenya.
+  <b>ADEZ-MD</b> is a powerful, AI-enhanced WhatsApp automation bot with 66 commands across 7 categories, built on Baileys and Node.js and deployed on Render. Crafted by <a href="https://arnoldadezbot.onrender.com/pair.html">TAP HERE TO PAIR</a> · Kenya.
 </p>
