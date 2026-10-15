@@ -1,4 +1,5 @@
 import os from 'os'
+import { getBotImage } from '../lib/botimage.js'
 
 export const name = 'menu'
 export const category = 'Main'
@@ -79,12 +80,12 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
     text += `│ *${i + 1}.* ${ICONS[cat] || '📌'} ${cat.toUpperCase()} (${groups[cat].length})\n`
   })
   text += `└▣\n`
-  text += `\n_Send ${prefix}menu 1 to open category 1_\n_Full list: ${prefix}menu2_`
+  text += `\n_Reply to this message with a number (e.g. 1) to open that category_\n_Full list: ${prefix}menu2_`
 
-  const image = process.env.MENU_IMAGE
+  const image = getBotImage()
   if (image) {
     try {
-      await sock.sendMessage(from, { image: { url: image }, caption: text }, { quoted: m })
+      await sock.sendMessage(from, { image, caption: text }, { quoted: m })
       return
     } catch (e) {
       console.log('Menu image failed, sending text only:', e.message)
