@@ -1,9 +1,13 @@
 import os from 'os'
+import { getSetting } from '../lib/settings.js'
 
 export const name = 'menu2'
 export const category = 'Main'
 export const aliases = ['fullmenu', 'allmenu']
 export const description = 'Shows all commands'
+
+// Order of the categories in the menu. Any new category you add later shows up after these.
+const ORDER = ['general', 'download', 'ai', 'tools', 'fun', 'media', 'group', 'owner', 'main']
 
 const cap = (s) => String(s).charAt(0).toUpperCase() + String(s).slice(1).toLowerCase()
 
@@ -36,6 +40,13 @@ export async function run({ sock, from, m, reply, prefix, getAllCommands }) {
     groups[cat].push(cmd.name)
   }
 
+  // Put the categories in the order above (unknown ones go last, A to Z)
+  const rank = (cat) => {
+    const i = ORDER.indexOf(cat.toLowerCase())
+    return i === -1 ? ORDER.length : i
+  }
+  const sortedCats = Object.keys(groups).sort((a, b) => rank(a) - rank(b) || a.localeCompare(b))
+
   const sent = Number(m?.messageTimestamp || 0) * 1000
   const speed = sent ? Math.max(0, Date.now() - sent) : 0
   const ram = ramBar()
@@ -45,7 +56,7 @@ export async function run({ sock, from, m, reply, prefix, getAllCommands }) {
   text += `│ *PREFIX* : [ ${prefix} ]\n`
   text += `│ *HOST* : Render\n`
   text += `│ *PLUGINS* : ${all.length}\n`
-  text += `│ *MODE* : Public\n`
+  text += `│ *MODE* : ${cap(getSetting('mode') || 'public')}\n`
   text += `│ *VERSION* : 1.0.0\n`
   text += `│ *SPEED* : ${speed} ms\n`
   text += `│ *USAGE* : ${ram.usage}\n`
@@ -53,9 +64,9 @@ export async function run({ sock, from, m, reply, prefix, getAllCommands }) {
   text += `│ *UPTIME* : ${uptime()}\n`
   text += `└▣\n`
 
-  for (const [cat, names] of Object.entries(groups)) {
+  for (const cat of sortedCats) {
     text += `\n┌▣ ◈ *${cat.toUpperCase()} MENU* ◈\n`
-    for (const n of names.sort()) {
+    for (const n of groups[cat].sort()) {
       text += `│ ➽ ${n}\n`
     }
     text += `└▣\n`
