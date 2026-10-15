@@ -1,34 +1,34 @@
-import { getSetting } from '../lib/settings.js'
+import { getSetting, setSetting } from '../lib/settings.js'
 import { box } from '../lib/style.js'
 
 export const name = 'antibot'
+export const category = 'group'
+export const aliases = []
+export const description = 'Remove other bots from the group (on / off)'
 
-// A guess based on the message ID. Messages sent by other Baileys bots often start with
-// "BAE5", or are a very long "3EB0..." ID. Real WhatsApp apps use shorter IDs.
-// It can be wrong, so this only deletes the message and warns. It never removes anyone.
-export function looksLikeBot(id = '') {
-  return /^BAE5/.test(id) || (id.startsWith('3EB0') && id.length >= 32)
-}
-
-const num = (jid = '') => String(jid).split('@')[0].split(':')[0]
-
-export async function run(ctx) {
-  const { sock, m, from, sender, isGroup, isAdmin, isBotAdmin, isOwner } = ctx
-  if (!isGroup || m.key.fromMe) return
-  if (isAdmin || isOwner || !isBotAdmin) return
-  if (!looksLikeBot(m.key.id)) return
+export async function run({ args, reply, isGroup, isAdmin, isBotAdmin, isOwner, from, prefix }) {
+  if (!isGroup) return reply('This command works in groups only.')
+  if (!isAdmin && !isOwner) return reply('⛔ Admins only.')
 
   let map = {}
-  try { map = JSON.parse(getSetting('antibot') || '{}') } catch { return }
-  if (map[from] !== 'on') return
+  try { map = JSON.parse(getSetting('antibot') || '{}') } catch {}
 
-  try {
-    await sock.sendMessage(from, { delete: m.key })
-    await sock.sendMessage(from, {
-      text: box('ANTI-BOT', [['user', '@' + num(sender)], 'Bot messages are not allowed here. Message deleted.']),
-      mentions: [sender]
-    })
-  } catch (e) {
-    console.log('Antibot failed:', e.message)
+  const opt = (args[0] || '').toLowerCase()
+  if (!['on', 'off'].includes(opt)) {
+    return reply(
+      box('ANTI-BOT', [
+        ['this group', map[from] || 'off'],
+        `${prefix}antibot on - remove other bots`,
+        `${prefix}antibot off - turn off`
+      ])
+    )
   }
+
+  if (opt === 'off') delete map[from]
+  else map[from] = opt
+  await setSetting('antibot', JSON.stringify(map))
+
+  const rows = [['this group', opt]]
+  if (opt !== 'off' && !isBotAdmin) rows.push('⚠️ Make the bot an admin or this cannot work')
+  return reply(box('ANTI-BOT', rows))
 }
