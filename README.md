@@ -1,116 +1,157 @@
-<div align="center"><img src="https://capsule-render.vercel.app/api?type=waving&color=0:000000,50:001F5C,100:00BFFF&height=220&section=header&text=ADEZ%20MD&fontSize=70&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=NEXT%20GENERATION%20WHATSAPP%20BOT&descAlignY=55&descSize=17" width="100%"/><img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=22&duration=3000&pause=1000&color=00BFFF&center=true&vCenter=true&width=600&lines=Welcome+to+ADEZ+MD;WhatsApp+Automation;Fast+%7C+Smart+%7C+Powerful;Developed+by+ARNOLD+ADEZ" alt="Typing Animation"/><br/><a href="https://arnoldadezbot.onrender.com/pair.html">
+<div align="center">
+
+<img src="https://capsule-render.vercel.app/api?type=waving&color=0:000000,50:001F5C,100:00BFFF&height=220&section=header&text=ADEZ%20MD&fontSize=70&fontColor=ffffff&animation=fadeIn&fontAlignY=35&desc=NEXT%20GENERATION%20WHATSAPP%20BOT&descAlignY=55&descSize=17" width="100%" alt="ADEZ MD Banner"/>
+
+<br/>
+
+<img src="https://readme-typing-svg.demolab.com?font=Fira+Code&weight=700&size=22&duration=3000&pause=1000&color=00BFFF&center=true&vCenter=true&width=600&lines=Welcome+to+ADEZ+MD;Smart+WhatsApp+Automation;Fast+%7C+Powerful+%7C+Reliable;Developed+by+ARNOLD+ADEZ" alt="ADEZ MD Animated Text"/>
+
+<br/><br/>
+
+<a href="https://arnoldadezbot.onrender.com/pair.html">
 <img src="https://img.shields.io/badge/⚡_GET_PAIRING_CODE-00BFFF?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Get Pairing Code"/>
-</a><a href="https://github.com/adeztech2/adez-md">
+</a>
+
+<a href="https://github.com/adeztech2/adez-md">
 <img src="https://img.shields.io/badge/💻_SOURCE_CODE-181717?style=for-the-badge&logo=github&logoColor=white" alt="Source Code"/>
-</a><a href="https://github.com/adeztech2/adez-md/fork">
+</a>
+
+<a href="https://github.com/adeztech2/adez-md/fork">
 <img src="https://img.shields.io/badge/🍴_FORK_REPOSITORY-003366?style=for-the-badge&logo=github&logoColor=white" alt="Fork Repository"/>
-</a><br/><br/>
+</a>
 
-"WhatsApp" (https://img.shields.io/badge/WhatsApp-Bot-25D366?style=for-the-badge&logo=whatsapp&logoColor=white)
-"Node.js" (https://img.shields.io/badge/Node.js-Powered-339933?style=for-the-badge&logo=nodedotjs&logoColor=white)
-"Developer" (https://img.shields.io/badge/Developer-ARNOLD%20ADEZ-007BFF?style=for-the-badge)
+<br/><br/>
 
-🚀 YOUR WHATSAPP EXPERIENCE, UPGRADED!
+<img src="https://img.shields.io/badge/WHATSAPP-BOT-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="WhatsApp Bot"/>
+<img src="https://img.shields.io/badge/NODE.JS-POWERED-339933?style=for-the-badge&logo=nodedotjs&logoColor=white" alt="Node.js"/>
+<img src="https://img.shields.io/badge/OWNER-ARNOLD_ADEZ-007BFF?style=for-the-badge" alt="Owner Arnold Adez"/>
 
-</div>---
+<h3>🚀 YOUR WHATSAPP EXPERIENCE, UPGRADED!</h3>
 
-🤖 ABOUT ADEZ MD
+<p>
+  <b>POWERFUL • FAST • SMART • RELIABLE</b>
+</p>
 
-ADEZ MD is a WhatsApp bot project developed by ARNOLD ADEZ, under the ADEZ TECH brand.
+</div>
+
+---
+
+## 🤖 ABOUT ADEZ MD
+
+**ADEZ MD** is a WhatsApp bot project developed by **ARNOLD ADEZ** under the **ADEZ TECH** brand.
 
 Designed to provide a smarter messaging experience through automation, entertainment, utility tools, and other supported features.
 
-✨ FEATURES
+### 💎 Project Information
 
-- ⚡ Fast command execution
-- 🔐 WhatsApp pairing-code authentication
-- 🎮 Entertainment commands
-- 🛠️ Utility tools
-- 👥 Group management tools
-- 🎵 Media features
-- ☁️ Cloud deployment support
-- 📱 Termux compatibility
-
-Features depend on the commands implemented in the bot.
+| Information | Details |
+|---|---|
+| 🤖 Bot Name | ADEZ MD |
+| 👑 Owner | ARNOLD ADEZ |
+| 🏢 Brand | ADEZ TECH |
+| 💻 Runtime | Node.js |
+| 📚 Library | Baileys |
+| 📱 Platform | WhatsApp |
+| ☁️ Hosting | Render |
+| 🔗 Pairing | Online Pairing Page |
 
 ---
 
-🔗 CONNECT YOUR WHATSAPP
+## ✨ FEATURES
 
-<div align="center">🔥 READY TO PAIR?
+<table>
+<tr>
+<td align="center" width="50%">
 
-Click below to open the ADEZ MD live pairing website.
+### 🤖 SMART BOT
+
+Automated commands and messaging tools.
+
+</td>
+<td align="center" width="50%">
+
+### 🔐 WHATSAPP PAIRING
+
+Pairing-code authentication, if supported by your deployment.
+
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+
+### 🎮 ENTERTAINMENT
+
+Fun commands and interactive features.
+
+</td>
+<td align="center" width="50%">
+
+### 🛠️ UTILITY TOOLS
+
+Helpful commands for everyday use.
+
+</td>
+</tr>
+<tr>
+<td align="center" width="50%">
+
+### 👥 GROUP TOOLS
+
+Group management features, if implemented.
+
+</td>
+<td align="center" width="50%">
+
+### ☁️ CLOUD DEPLOYMENT
+
+Run on supported hosting platforms.
+
+</td>
+</tr>
+</table>
+
+> Note: Available features depend on the commands implemented in the repository.
+
+---
+
+## 🔗 PAIR YOUR WHATSAPP
+
+<div align="center">
+
+<img src="https://img.shields.io/badge/STATUS-LIVE_PAIRING_PAGE-00C853?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Pairing Page"/>
+
+<h3>⚡ CONNECT TO ADEZ MD ⚡</h3>
+
+<p>Click below to open the pairing website.</p>
 
 <a href="https://arnoldadezbot.onrender.com/pair.html">
 <img src="https://img.shields.io/badge/🔗_PAIR_ADEZ_MD_NOW-00C853?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Pair ADEZ MD Now"/>
-</a><br/><br/>
+</a>
 
-How to connect:
-
-1. Open the pairing website.
-2. Enter your WhatsApp number with the country code.
-3. Generate your pairing code.
-4. Open WhatsApp and navigate to Settings → Linked Devices.
-5. Select Link a Device.
-6. Choose phone-number linking if available, then enter the code.
-
-Follow the instructions displayed on the pairing website.
-
-</div>«🔒 Security: Never share your pairing code or authentication session. Only link your account through a service you trust.»
-
----
-
-📲 INSTALL ON TERMUX
-
-Step 1: Install requirements
-
-pkg update && pkg upgrade -y
-pkg install nodejs git -y
-
-Step 2: Clone ADEZ MD
-
-git clone https://github.com/adeztech2/adez-md.git
-
-Step 3: Enter the project
-
-cd adez-md
-
-Step 4: Install dependencies
-
-npm install
-
-Step 5: Start the bot
-
-npm start
-
-Follow the instructions provided by the application.
-
----
-
-☁️ DEPLOYMENT
-
-<div align="center"><a href="https://render.com">
-<img src="https://img.shields.io/badge/DEPLOY-RENDER-46E3B7?style=for-the-badge&logo=render&logoColor=black" alt="Render"/>
-</a><a href="https://github.com/adeztech2/adez-md">
-<img src="https://img.shields.io/badge/VIEW-GITHUB-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub"/>
-</a></div>---
-
-📊 GITHUB STATISTICS
-
-<div align="center"><img src="https://github-readme-stats.vercel.app/api?username=adeztech2&show_icons=true&theme=tokyonight&hide_border=true&bg_color=000000" alt="ADEZ TECH GitHub Statistics" width="48%"/><img src="https://github-readme-streak-stats.herokuapp.com/?user=adeztech2&theme=tokyonight&hide_border=true&background=000000" alt="GitHub Contribution Streak" width="48%"/><img src="https://github-readme-activity-graph.vercel.app/graph?username=adeztech2&theme=react-dark&hide_border=true&bg_color=000000" alt="GitHub Activity Graph" width="100%"/></div>---
-
-👑 DEVELOPER
-
-<div align="center"><img src="https://img.shields.io/badge/OWNER-ARNOLD_ADEZ-00BFFF?style=for-the-badge"/>ADEZ TECH
-
-Innovation • Technology • Automation
-
-Building the future, one command at a time.
-
-</div>---
-
-<div align="center"><img src="https://capsule-render.vercel.app/api?type=waving&color=0:00BFFF,50:001F5C,100:000000&height=120&section=footer" width="100%"/>⚡ ADEZ MD — POWERED BY ADEZ TECH ⚡
-
-© 2026 ARNOLD ADEZ | All Rights Reserved
+<br/><br/>
 
 </div>
+
+### 📲 Pairing Instructions
+
+1. Open the ADEZ MD pairing page.
+2. Enter your WhatsApp number with the correct country code.
+3. Generate your pairing code.
+4. Open WhatsApp on your phone.
+5. Go to **Settings → Linked Devices**.
+6. Select **Link a Device**.
+7. Choose phone-number linking if available.
+8. Enter the pairing code displayed on the website.
+
+Follow the instructions provided by the pairing page.
+
+**🔒 Security Notice:** Never share your pairing code or authentication session. Only link your WhatsApp account through a service you trust.
+
+---
+
+## 📱 INSTALL ADEZ MD ON TERMUX
+
+### Step 1: Update Termux
+
+```bash
+pkg update && pkg upgrade -y
