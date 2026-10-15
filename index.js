@@ -22,7 +22,7 @@ const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Brow
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
-import { loadSettings, getSetting } from './lib/settings.js'
+import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 
 // ---------- Quiet the encryption log spam ----------
@@ -309,7 +309,7 @@ async function startSession(s) {
       for (const m of messages) cacheMessage(s, m)
       if (type !== 'notify') return
       for (const m of messages) {
-        try { await handleMessage(sock, m) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
+        try { await runAs(s.number, () => handleMessage(sock, m)) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
       }
     })
   } finally {
