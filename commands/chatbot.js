@@ -1,25 +1,22 @@
 import { getSetting, setSetting } from '../lib/settings.js'
-import { box } from '../lib/style.js'
 
 export const name = 'chatbot'
 export const category = 'owner'
 export const aliases = []
-export const description = 'Let the bot reply to messages with AI (on / off)'
+export const description = 'Turn the AI chatbot on or off (on / off)'
 
 export async function run({ args, reply, isOwner, prefix }) {
-  if (!isOwner) return reply('⛔ Owner only.')
+  if (!isOwner) return reply('Owner only.')
+
   const opt = (args[0] || '').toLowerCase()
+  const current = getSetting('chatbot') === 'on' ? 'on' : 'off'
+
   if (!['on', 'off'].includes(opt)) {
     return reply(
-      box('CHATBOT', [
-        ['status', getSetting('chatbot') || 'off'],
-        `${prefix}chatbot on - reply to people with AI`,
-        `${prefix}chatbot off - turn off`,
-        'Private chats: replies to every message',
-        'Groups: replies only when someone tags or replies to the bot'
-      ])
+      `Chatbot is ${current}.\n\n${prefix}chatbot on - answer normal messages with AI\n${prefix}chatbot off - turn off`
     )
   }
+
   await setSetting('chatbot', opt)
-  return reply(box('CHATBOT', [['status', opt]]))
+  return reply(`Chatbot is now ${opt}.`)
 }
