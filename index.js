@@ -25,6 +25,7 @@ import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 import { autoFollowChannel, channelContext } from './lib/channel.js'
+import { getBotImage } from './lib/botimage.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -106,6 +107,24 @@ function applyChannelLook(sock) {
     } catch {}
     return original(jid, content, options)
   }
+}
+
+// ---------- Reply with a number to the menu -> open that category ----------
+// If someone replies "1" to the bot's numbered menu, turn it into ".menu 1"
+function rewriteMenuReply(m) {
+  try {
+    const msg = m?.message
+    if (!msg) return
+    const text = (msg.extendedTextMessage?.text || msg.conversation || '').trim()
+    if (!/^\d{1,2}$/.test(text)) return
+    const quoted = msg.extendedTextMessage?.contextInfo?.quotedMessage
+    if (!quoted) return
+    const quotedText =
+      quoted.conversation || quoted.extendedTextMessage?.text || quoted.imageMessage?.caption || ''
+    if (!quotedText.includes('CATEGORIES')) return
+    const prefix = getSetting('prefix') || '.'
+    m.message = { conversation: `${prefix}menu ${text}` }
+  } catch {}
 }
 
 // ---------- Web ----------
@@ -309,9 +328,9 @@ async function startSession(s) {
             `📢 Join our channel:\n` +
             `https://whatsapp.com/channel/0029Vb8N0xYLikgHxdGh790m\n\n` +
             `_Powered by ADEZ TECH_`
-          const image = process.env.MENU_IMAGE
+          const image = getBotImage()
           try {
-            await sock.sendMessage(jid, image ? { image: { url: image }, caption: alert } : { text: alert })
+            await sock.sendMessage(jid, image ? { image, caption: alert } : { text: alert })
           } catch {
             try { await sock.sendMessage(jid, { text: alert }) } catch (e) { console.log(`⚠️ [${s.id}] welcome failed:`, e.message) }
           }
@@ -350,7 +369,7 @@ async function startSession(s) {
       for (const m of messages) cacheMessage(s, m)
       if (type !== 'notify') return
       for (const m of messages) {
-        try { await runAs(s.number, () => handleMessage(sock, m)) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
+        try { await runAs(s.number, () => { rewriteMenuReply(m); return handleMessage(sock, m) }) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
       }
     })
   } finally {
