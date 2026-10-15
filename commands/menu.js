@@ -1,5 +1,6 @@
 import os from 'os'
 import { getBotImage } from '../lib/botimage.js'
+import { styleTitle } from '../lib/style.js'
 
 export const name = 'menu'
 export const category = 'Main'
@@ -43,15 +44,15 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
 
   const input = (args?.[0] || '').toLowerCase()
 
-  // .menu <number or name>  ->  commands in that category
+  // .menu <number or name>  ->  command names only in that category
   if (input) {
     const pick = /^\d+$/.test(input) ? cats[Number(input) - 1] : cats.find((c) => c === input)
     if (!pick) {
       return reply(`❌ No category "${input}".\nUse ${prefix}menu to see the numbers.`)
     }
-    let text = `┌▣ ◈ *${ICONS[pick] || '📌'} ${pick.toUpperCase()} MENU* ◈\n`
+    let text = `┌▣ ◈ ${styleTitle(`${ICONS[pick] || '📌'} ${pick.toUpperCase()} MENU`)} ◈\n`
     for (const c of groups[pick].sort((a, b) => a.name.localeCompare(b.name))) {
-      text += `│ ➽ ${prefix}${c.name}\n│    _${c.description || 'no description'}_\n`
+      text += `│ ➽ ${prefix}${c.name}\n`
     }
     text += `└▣\n\n_Back to categories: ${prefix}menu_`
     return reply(text)
@@ -62,7 +63,7 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
   const speed = sent ? Math.max(0, Date.now() - sent) : 0
   const ram = ramBar()
 
-  let text = `┌▣ ◈ *${botName}* ◈\n`
+  let text = `┌▣ ◈ ${styleTitle(botName)} ◈\n`
   text += `│ *OWNER* : Arnold Adez\n`
   text += `│ *PREFIX* : [ ${prefix} ]\n`
   text += `│ *HOST* : Render\n`
@@ -75,7 +76,7 @@ export async function run({ sock, from, m, args, reply, prefix, getAllCommands }
   text += `│ *UPTIME* : ${uptime()}\n`
   text += `└▣\n`
 
-  text += `\n┌▣ ◈ *CATEGORIES* ◈\n`
+  text += `\n┌▣ ◈ ${styleTitle('CATEGORIES')} ◈\n`
   cats.forEach((cat, i) => {
     text += `│ *${i + 1}.* ${ICONS[cat] || '📌'} ${cat.toUpperCase()} (${groups[cat].length})\n`
   })
