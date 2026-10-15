@@ -21,7 +21,7 @@ const makeWASocket =
 const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
-import { box } from './lib/style.js'
+import { box, styleTitle } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
 import { autoFollowChannel, channelContext } from './lib/channel.js'
@@ -112,6 +112,7 @@ function applyChannelLook(sock) {
 
 // ---------- Reply with a number to the menu -> open that category ----------
 // If someone replies "1" to the bot's numbered menu, turn it into ".menu 1"
+// (or "menu 1" when the prefix is set to none)
 function rewriteMenuReply(m) {
   try {
     const msg = m?.message
@@ -123,7 +124,7 @@ function rewriteMenuReply(m) {
     const quotedText =
       quoted.conversation || quoted.extendedTextMessage?.text || quoted.imageMessage?.caption || ''
     if (!quotedText.includes('CATEGORIES')) return
-    const prefix = getSetting('prefix') || '.'
+    const prefix = getSetting('prefix') ?? ''
     m.message = { conversation: `${prefix}menu ${text}` }
   } catch {}
 }
@@ -308,20 +309,22 @@ async function startSession(s) {
 
         if (!s.welcomeSent) {
           s.welcomeSent = true
-          const prefix = getSetting('prefix') || '.'
+          // Each number's own settings (this runs outside a message, so runAs is needed)
+          const prefix = runAs(s.number, () => getSetting('prefix')) ?? '.'
+          const mode = runAs(s.number, () => getSetting('mode')) || 'public'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
           const alert =
-            `┌▣ ◈ *${BOT_NAME} LINKED* ◈\n` +
+            `┌▣ ◈ ${styleTitle(`${BOT_NAME} LINKED`)} ◈\n` +
             `│ *STATUS* : Connected ✅\n` +
             `│ *NUMBER* : +${s.number}\n` +
             `│ *OWNER* : ${OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'}\n` +
-            `│ *PREFIX* : [ ${prefix} ]\n` +
-            `│ *MODE* : ${getSetting('mode') || 'public'}\n` +
+            `│ *PREFIX* : ${prefix ? `[ ${prefix} ]` : 'none'}\n` +
+            `│ *MODE* : ${mode}\n` +
             `│ *PLUGINS* : ${getAllCommands().length}\n` +
             `│ *HOST* : Render\n` +
             `│ *TIME* : ${new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })}\n` +
             `└▣\n\n` +
-            `┌▣ ◈ *GET STARTED* ◈\n` +
+            `┌▣ ◈ ${styleTitle('GET STARTED')} ◈\n` +
             `│ ➽ ${prefix}menu - categories\n` +
             `│ ➽ ${prefix}menu2 - all commands\n` +
             `│ ➽ ${prefix}ping - check speed\n` +
