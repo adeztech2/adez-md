@@ -1,3 +1,5 @@
+import { box } from '../lib/style.js'
+
 export const name = 'ping'
 export const category = 'general'
 export const description = 'Check bot speed'
@@ -14,11 +16,11 @@ export async function run({ m, reply }) {
   const sent = Number(m?.messageTimestamp || 0) * 1000
   const speed = sent ? Math.max(0, Date.now() - sent) : 0
 
-  let text = `┌▣ ◈ *${botName} PING* ◈\n`
-  text += `│ *SPEED* : ${speed} ms\n`
-  text += `│ *STATUS* : Online ✅\n`
-  text += `│ *UPTIME* : ${uptime()}\n`
-  text += `└▣`
+  const text = box(`${botName} PING`, [
+    ['speed', `${speed} ms`],
+    ['status', 'Online ✅'],
+    ['uptime', uptime()]
+  ])
 
   await reply(text)
 }
