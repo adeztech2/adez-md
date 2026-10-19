@@ -8,7 +8,7 @@ heroku stack:set container -a $APP
 heroku config:set \
   BOT_NAME="ADEZ MD" \
   OWNER_NUMBER=254111783552 \
-  SUPABASE_URL="your-supabase-url" \
+  SUPABASE_URL="https://nonmdcadnadbyqmwrvlu.supabase.co" \
   SUPABASE_KEY="your-supabase-key" \
   MAX_SESSIONS=5 \
   STAGGER_MS=4000 \
