@@ -1,0 +1,6 @@
+node_modules
+sessions
+.git
+.env
+.env.*
+*.zip
