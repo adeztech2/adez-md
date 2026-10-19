@@ -64,6 +64,14 @@ const io = new Server(server)
 const sessions = new Map() // id -> state
 
 const connectedCount = () => [...sessions.values()].filter((s) => s.status === 'connected').length
+
+// Why a number cannot be paired right now (null means it can)
+const whyBusy = (s) =>
+  !s ? null
+  : s.status === 'connected' ? 'This number is already connected'
+  : s.pairNumber ? 'Pairing for this number is already in progress, wait 3 minutes'
+  : 'This number is already linked and is starting up. Wait a minute, it reconnects by itself.'
+
 const emitTo = (s, event, payload) => {
   if (event === 'pairCode') s.onCode?.(payload) // used by the .pair command
   if (event === 'pairError') s.onError?.(payload)
@@ -101,11 +109,8 @@ io.on('connection', (client) => {
       const clean = String(number || '').replace(/\D/g, '')
       if (clean.length < 8) return client.emit('pairError', 'Enter your number with country code')
       const id = 'user_' + clean
-      const existing = sessions.get(id)
-      if (existing) {
-        if (existing.status === 'connected') return client.emit('pairError', 'This number is already connected')
-        return client.emit('pairError', 'Pairing for this number is already in progress, wait 3 minutes')
-      }
+      const busy = whyBusy(sessions.get(id))
+      if (busy) return client.emit('pairError', busy)
       if (sessions.size >= MAX_SESSIONS) return client.emit('pairError', 'Bot is full right now. Contact the owner.')
 
       const s = makeState(id, { skipRestore: true, pairNumber: clean, pairClient: client.id })
@@ -333,10 +338,14 @@ async function startAllSessions() {
     console.log('⚠️ Could not list saved sessions:', e.message)
   }
   console.log(`👥 Starting ${Math.min(ids.length, MAX_SESSIONS)} saved session(s) (max ${MAX_SESSIONS})`)
-  for (const id of ids.slice(0, MAX_SESSIONS)) {
+  // Reserve every saved number first, so nobody can start a second copy of one while it waits its turn
+  const states = ids.slice(0, MAX_SESSIONS).map((id) => {
     const s = makeState(id)
     sessions.set(id, s)
-    try { await startSession(s) } catch (e) { console.log(`❌ [${id}] start failed:`, e.message); scheduleStart(s, 5000) }
+    return s
+  })
+  for (const s of states) {
+    try { await startSession(s) } catch (e) { console.log(`❌ [${s.id}] start failed:`, e.message); scheduleStart(s, 5000) }
     await sleep(STAGGER_MS)
   }
 }
@@ -347,12 +356,8 @@ function pairFromChat(number) {
     const clean = String(number || '').replace(/\D/g, '')
     if (clean.length < 8) return reject(new Error('Enter the number with country code'))
     const id = 'user_' + clean
-    const existing = sessions.get(id)
-    if (existing) {
-      return reject(new Error(existing.status === 'connected'
-        ? 'This number is already connected'
-        : 'Pairing for this number is already in progress, wait 3 minutes'))
-    }
+    const busy = whyBusy(sessions.get(id))
+    if (busy) return reject(new Error(busy))
     if (sessions.size >= MAX_SESSIONS) return reject(new Error('Bot is full right now. Contact the owner.'))
 
     const s = makeState(id, { skipRestore: true, pairNumber: clean })
