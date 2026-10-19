@@ -1,76 +1,23 @@
 {
   "name": "adez-md",
   "description": "ADEZ MD WhatsApp bot. Link numbers with a pair code and run commands from one bot.",
-  "repository": "https://github.com/your-username/your-repo",
-  "logo": "https://example.com/logo.png",
   "keywords": ["whatsapp", "bot", "baileys", "node"],
   "stack": "container",
   "env": {
-    "BOT_NAME": {
-      "description": "Name shown in menus and cards",
-      "value": "ADEZ MD",
-      "required": false
-    },
-    "OWNER_NUMBER": {
-      "description": "Owner's number with country code, no + or spaces (e.g. 254111783552)",
-      "required": true
-    },
-    "SUPABASE_URL": {
-      "description": "Your Supabase project URL",
-      "required": true
-    },
-    "SUPABASE_KEY": {
-      "description": "Supabase service key used to save and restore sessions",
-      "required": true
-    },
-    "MAX_SESSIONS": {
-      "description": "Maximum number of linked numbers",
-      "value": "5",
-      "required": false
-    },
-    "STAGGER_MS": {
-      "description": "Delay in ms between starting each saved session",
-      "value": "4000",
-      "required": false
-    },
-    "START_DELAY_MS": {
-      "description": "Delay in ms before starting sessions, so an old copy can shut down",
-      "value": "15000",
-      "required": false
-    },
-    "BOT_FONT": {
-      "description": "Title font: italic | bold | smallcaps | mono | normal",
-      "value": "bold",
-      "required": false
-    },
-    "MENU_IMAGE": {
-      "description": "Optional image URL sent with the menu",
-      "required": false
-    },
-    "AI_API_URL": {
-      "description": "OpenAI-compatible chat endpoint",
-      "value": "https://api.deepseek.com/v1/chat/completions",
-      "required": false
-    },
-    "AI_API_KEY": {
-      "description": "API key for the AI provider",
-      "required": false
-    },
-    "AI_MODEL": {
-      "description": "Model name for the AI provider",
-      "value": "deepseek-chat",
-      "required": false
-    },
-    "YTDLP_PATH": {
-      "description": "Optional path to a yt-dlp binary. The Dockerfile already installs one at /usr/local/bin/yt-dlp",
-      "value": "/usr/local/bin/yt-dlp",
-      "required": false
-    }
+    "BOT_NAME": { "description": "Name shown in menus and cards", "value": "ADEZ MD", "required": false },
+    "OWNER_NUMBER": { "description": "Owner number with country code, no + or spaces", "required": true },
+    "SUPABASE_URL": { "description": "Your Supabase project URL", "required": true },
+    "SUPABASE_KEY": { "description": "Supabase key used to save and restore sessions", "required": true },
+    "MAX_SESSIONS": { "description": "Maximum linked numbers", "value": "5", "required": false },
+    "STAGGER_MS": { "description": "Delay in ms between starting saved sessions", "value": "4000", "required": false },
+    "START_DELAY_MS": { "description": "Delay in ms before starting sessions", "value": "0", "required": false },
+    "BOT_FONT": { "description": "Title font: italic | bold | smallcaps | mono | normal", "value": "bold", "required": false },
+    "MENU_IMAGE": { "description": "Optional image URL sent with the menu", "required": false },
+    "AI_API_URL": { "description": "OpenAI-compatible chat endpoint", "value": "https://api.deepseek.com/v1/chat/completions", "required": false },
+    "AI_API_KEY": { "description": "API key for the AI provider", "required": false },
+    "AI_MODEL": { "description": "Model name for the AI provider", "value": "deepseek-chat", "required": false }
   },
   "formation": {
-    "web": {
-      "quantity": 1,
-      "size": "basic"
-    }
+    "web": { "quantity": 1, "size": "basic" }
   }
 }
