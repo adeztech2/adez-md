@@ -2,7 +2,7 @@ import { box } from '../lib/style.js'
 
 export const name = 'pair'
 export const category = 'general'
-export const aliases = ['getcode', 'link']
+export const aliases = ['getcode']
 export const description = 'Get a pairing code to link a number: .pair 2547XXXXXXXX'
 
 const lastUse = new Map() // sender -> time, so nobody floods the bot with requests
