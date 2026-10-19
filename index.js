@@ -21,10 +21,10 @@ const makeWASocket =
 const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
-import { box } from './lib/style.js'
+import { linkedMessage } from './lib/welcome.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
-import { installChannelForward } from './lib/channelforward.js'
+import { installChannelForward } from './lib/channel.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -267,13 +267,13 @@ async function startSession(s) {
           s.welcomeSent = true
           const prefix = getSetting('prefix') || '.'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
-          const alert = box(`${BOT_NAME} LINKED`, [
-            ['status', 'Connected successfully ✅'],
-            ['owner', OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'],
-            ['prefix', `[ ${prefix} ]`],
-            ['plugins', getAllCommands().length],
-            ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
-          ]) + `\n\n_Type ${prefix}menu to see all commands_`
+          const alert = linkedMessage({
+            botName: BOT_NAME,
+            number: s.number,
+            isOwner: !!(OWNER_NUMBER && s.number === OWNER_NUMBER),
+            prefix,
+            commands: getAllCommands().length
+          })
           const image = process.env.MENU_IMAGE
           try {
             await sock.sendMessage(jid, image ? { image: { url: image }, caption: alert } : { text: alert })
