@@ -9,7 +9,7 @@ heroku config:set \
   BOT_NAME="ADEZ MD" \
   OWNER_NUMBER=254111783552 \
   SUPABASE_URL="https://nonmdcadnadbyqmwrvlu.supabase.co" \
-  SUPABASE_KEY="your-supabase-key" \
+  SUPABASE_KEY="eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5vbm1kY2FkbmFkYnlxbXdydmx1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTE4NDM3MDYsImV4cCI6MjEwNzQxOTcwNn0.poRnRS3b3BpfmBSMcCJEPO-CGQXMA0oFE6bVkKhnquM" \
   MAX_SESSIONS=5 \
   STAGGER_MS=4000 \
   START_DELAY_MS=0 \
