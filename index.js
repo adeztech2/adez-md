@@ -24,7 +24,7 @@ import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
-import { installChannelForward } from './lib/channel.js'
+import { installChannelForward } from './lib/channelforward.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
