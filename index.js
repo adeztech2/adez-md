@@ -21,10 +21,10 @@ const makeWASocket =
 const { useMultiFileAuthState, DisconnectReason, fetchLatestBaileysVersion, Browsers } = baileys
 import { loadCommands, loadObservers, handleMessage, getAllCommands } from './lib/router.js'
 import { registerEvents } from './lib/events.js'
-import { linkedMessage } from './lib/welcome.js'
+import { box, noForward } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
-import { installChannelForward } from './lib/channel.js'
+import { handleStatus } from './lib/status.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -64,14 +64,6 @@ const io = new Server(server)
 const sessions = new Map() // id -> state
 
 const connectedCount = () => [...sessions.values()].filter((s) => s.status === 'connected').length
-
-// Why a number cannot be paired right now (null means it can)
-const whyBusy = (s) =>
-  !s ? null
-  : s.status === 'connected' ? 'This number is already connected'
-  : s.pairNumber ? 'Pairing for this number is already in progress, wait 3 minutes'
-  : 'This number is already linked and is starting up. Wait a minute, it reconnects by itself.'
-
 const emitTo = (s, event, payload) => {
   if (event === 'pairCode') s.onCode?.(payload) // used by the .pair command
   if (event === 'pairError') s.onError?.(payload)
@@ -109,8 +101,11 @@ io.on('connection', (client) => {
       const clean = String(number || '').replace(/\D/g, '')
       if (clean.length < 8) return client.emit('pairError', 'Enter your number with country code')
       const id = 'user_' + clean
-      const busy = whyBusy(sessions.get(id))
-      if (busy) return client.emit('pairError', busy)
+      const existing = sessions.get(id)
+      if (existing) {
+        if (existing.status === 'connected') return client.emit('pairError', 'This number is already connected')
+        return client.emit('pairError', 'Pairing for this number is already in progress, wait 3 minutes')
+      }
       if (sessions.size >= MAX_SESSIONS) return client.emit('pairError', 'Bot is full right now. Contact the owner.')
 
       const s = makeState(id, { skipRestore: true, pairNumber: clean, pairClient: client.id })
@@ -218,7 +213,6 @@ async function startSession(s) {
       getMessage: async (key) => s.msgCache.get(key?.id)
     })
     s.sock = sock
-    installChannelForward(sock) // channel label on every reply (needs CHANNEL_LINK in Render)
     registerEvents(sock)
 
     sock.ev.on('creds.update', () => {
@@ -272,18 +266,19 @@ async function startSession(s) {
           s.welcomeSent = true
           const prefix = getSetting('prefix') || '.'
           const jid = String(sock.user?.id || '').split(':')[0].split('@')[0] + '@s.whatsapp.net'
-          const alert = linkedMessage({
-            botName: BOT_NAME,
-            number: s.number,
-            isOwner: !!(OWNER_NUMBER && s.number === OWNER_NUMBER),
-            prefix,
-            commands: getAllCommands().length
-          })
+          const alert = box(`${BOT_NAME} LINKED`, [
+            ['status', 'Connected successfully ✅'],
+            ['owner', OWNER_NUMBER && s.number === OWNER_NUMBER ? 'Arnold Adez' : 'You'],
+            ['prefix', `[ ${prefix} ]`],
+            ['plugins', getAllCommands().length],
+            ['time', new Date().toLocaleString('en-GB', { timeZone: 'Africa/Nairobi' })]
+          ]) + `\n\n_Type ${prefix}menu to see all commands_`
           const image = process.env.MENU_IMAGE
+          const payload = image ? { image: { url: image }, caption: alert } : { text: alert }
           try {
-            await sock.sendMessage(jid, image ? { image: { url: image }, caption: alert } : { text: alert })
+            await sock.sendMessage(jid, noForward(payload))
           } catch {
-            try { await sock.sendMessage(jid, { text: alert }) } catch (e) { console.log(`⚠️ [${s.id}] welcome failed:`, e.message) }
+            try { await sock.sendMessage(jid, noForward({ text: alert })) } catch (e) { console.log(`⚠️ [${s.id}] welcome failed:`, e.message) }
           }
         }
       }
@@ -320,6 +315,8 @@ async function startSession(s) {
       for (const m of messages) cacheMessage(s, m)
       if (type !== 'notify') return
       for (const m of messages) {
+        // Statuses (status@broadcast) are handled first, since the router skips them
+        try { await handleStatus(sock, m) } catch (e) { console.log(`❌ [${s.id}] status error:`, e.message) }
         try { await runAs(s.number, () => handleMessage(sock, m)) } catch (e) { console.log(`❌ [${s.id}] handler error:`, e.stack || e) }
       }
     })
@@ -338,14 +335,10 @@ async function startAllSessions() {
     console.log('⚠️ Could not list saved sessions:', e.message)
   }
   console.log(`👥 Starting ${Math.min(ids.length, MAX_SESSIONS)} saved session(s) (max ${MAX_SESSIONS})`)
-  // Reserve every saved number first, so nobody can start a second copy of one while it waits its turn
-  const states = ids.slice(0, MAX_SESSIONS).map((id) => {
+  for (const id of ids.slice(0, MAX_SESSIONS)) {
     const s = makeState(id)
     sessions.set(id, s)
-    return s
-  })
-  for (const s of states) {
-    try { await startSession(s) } catch (e) { console.log(`❌ [${s.id}] start failed:`, e.message); scheduleStart(s, 5000) }
+    try { await startSession(s) } catch (e) { console.log(`❌ [${id}] start failed:`, e.message); scheduleStart(s, 5000) }
     await sleep(STAGGER_MS)
   }
 }
@@ -356,8 +349,12 @@ function pairFromChat(number) {
     const clean = String(number || '').replace(/\D/g, '')
     if (clean.length < 8) return reject(new Error('Enter the number with country code'))
     const id = 'user_' + clean
-    const busy = whyBusy(sessions.get(id))
-    if (busy) return reject(new Error(busy))
+    const existing = sessions.get(id)
+    if (existing) {
+      return reject(new Error(existing.status === 'connected'
+        ? 'This number is already connected'
+        : 'Pairing for this number is already in progress, wait 3 minutes'))
+    }
     if (sessions.size >= MAX_SESSIONS) return reject(new Error('Bot is full right now. Contact the owner.'))
 
     const s = makeState(id, { skipRestore: true, pairNumber: clean })
