@@ -2,7 +2,7 @@ import { box, botName } from '../lib/style.js'
 
 export const name = 'owner'
 export const category = 'general'
-export const aliases = ['creator', 'dev']
+export const aliases = ['creator']
 export const description = 'Show the owner contact'
 
 export async function run({ sock, from, m, reply }) {
