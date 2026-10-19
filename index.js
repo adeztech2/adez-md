@@ -24,6 +24,7 @@ import { registerEvents } from './lib/events.js'
 import { box } from './lib/style.js'
 import { loadSettings, getSetting, runAs } from './lib/settings.js'
 import { startAutoBio } from './lib/autobio.js'
+import { installChannelForward } from './lib/channel.js'
 
 // ---------- Quiet the encryption log spam ----------
 const NOISE_PREFIXES = [
@@ -212,6 +213,7 @@ async function startSession(s) {
       getMessage: async (key) => s.msgCache.get(key?.id)
     })
     s.sock = sock
+    installChannelForward(sock) // channel label on every reply (needs CHANNEL_LINK in Render)
     registerEvents(sock)
 
     sock.ev.on('creds.update', () => {
