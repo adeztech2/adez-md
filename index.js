@@ -1,5 +1,5 @@
 // ============================================================
-//  ADEZ MD - index.js  (v3: every number links with a pair code)
+//  ADEZ MD - index.js  (v3.1: pair-code login, access code, conflict fix)
 //  Logins are saved in Supabase table bu_sessions (id, data) as 'user_<number>'.
 //  Works with your existing lib/router.js, events.js, settings.js, autobio.js
 // ============================================================
@@ -49,6 +49,7 @@ const PORT = process.env.PORT || 3000
 const OWNER_NUMBER = String(process.env.OWNER_NUMBER || '').replace(/\D/g, '')
 const MAX_SESSIONS = Number(process.env.MAX_SESSIONS || 5)
 const STAGGER_MS = Number(process.env.STAGGER_MS || 4000)
+const ACCESS_CODE = process.env.ACCESS_CODE || '' // optional: if set, website pairing needs it
 const PAIR_TIMEOUT_MS = 3 * 60 * 1000
 const SYNC_INTERVAL = 2 * 60 * 1000
 const START_DELAY_MS = Number(process.env.START_DELAY_MS ?? (process.env.RENDER ? 15000 : 0))
@@ -96,8 +97,12 @@ app.use(express.static('public', { index: false }))
 
 io.on('connection', (client) => {
   client.emit('status', 'waiting_for_scan')
-  client.on('requestPair', async (number) => {
+  // Website sends: socket.emit('requestPair', number, accessCode)
+  client.on('requestPair', async (number, accessCode) => {
     try {
+      if (ACCESS_CODE && String(accessCode || '') !== ACCESS_CODE) {
+        return client.emit('pairError', 'Wrong access code')
+      }
       const clean = String(number || '').replace(/\D/g, '')
       if (clean.length < 8) return client.emit('pairError', 'Enter your number with country code')
       const id = 'user_' + clean
@@ -185,14 +190,21 @@ function scheduleStart(s, ms) {
   }, ms)
 }
 
-async function removeSession(s, reason) {
+// Frees the slot but KEEPS the saved login in Supabase (used after a conflict)
+function dropFromMemory(s) {
   if (s.removed) return
   s.removed = true
-  console.log(`🗑️ [${s.id}] Removed: ${reason}`)
   for (const t of [s.startTimer, s.syncTimer, s.pairTimeout]) if (t) clearTimeout(t)
   if (s.syncInterval) clearInterval(s.syncInterval)
   stopSocket(s)
   sessions.delete(s.id)
+}
+
+// Frees the slot AND deletes the saved login
+async function removeSession(s, reason) {
+  if (s.removed) return
+  console.log(`🗑️ [${s.id}] Removed: ${reason}`)
+  dropFromMemory(s)
   await clearSavedSession(s)
 }
 
@@ -294,9 +306,8 @@ async function startSession(s) {
         if (code === DisconnectReason.restartRequired) return scheduleStart(s, 1000)
 
         if (code === DisconnectReason.connectionReplaced || msg.toLowerCase().includes('conflict')) {
-          s.status = 'conflict'
-          console.log(`🚨 [${s.id}] CONFLICT: another copy uses this login. Stopping this session.`)
-          return stopSocket(s)
+          console.log(`🚨 [${s.id}] CONFLICT: another copy uses this login. Dropping this session (saved login kept).`)
+          return dropFromMemory(s)
         }
 
         if (code === DisconnectReason.loggedOut && s.live) return removeSession(s, 'user logged out')
@@ -389,4 +400,4 @@ async function shutdown() {
 process.on('SIGTERM', shutdown)
 process.on('SIGINT', shutdown)
 process.on('unhandledRejection', (e) => console.log('Unhandled rejection:', e))
-process.on('uncaughtException', (e) => console.log('Uncaught exception:', e))
+process.on('uncaughtException', (e) => { console.log('Uncaught exception:', e); process.exit(1) })
